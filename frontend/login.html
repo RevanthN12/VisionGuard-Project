@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VisionGuard | Secure Login</title>
+    <!-- Use FontAwesome for the user/lock icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Rajdhani:wght@500;600;700&display=swap');
+
+        :root {
+            --bg-color: #020b18;
+            --grid-color: rgba(0, 195, 255, 0.08);
+            --neon-blue: #00e5ff;
+            --neon-dark: #005f88;
+            --panel-bg: rgba(2, 16, 36, 0.85);
+            --text-color: #e0f7fa;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Rajdhani', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            
+            /* Background Grid */
+            background-image: 
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 25px 25px;
+            background-position: center center;
+        }
+
+        /* Abstract cyber/circuit background glow */
+        .cyber-bg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 800px;
+            height: 400px;
+            background: radial-gradient(circle at center, rgba(0, 229, 255, 0.15) 0%, transparent 60%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .login-wrapper {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            perspective: 1000px; /* Enable 3D space */
+        }
+
+        /* The Main Cyber Panel */
+        .login-panel {
+            background: var(--panel-bg);
+            border: 2px solid var(--neon-dark);
+            border-radius: 12px;
+            padding: 40px 50px;
+            width: 400px;
+            box-shadow: 
+                0 20px 50px rgba(0, 0, 0, 0.5),
+                0 0 20px rgba(0, 229, 255, 0.2),
+                inset 0 0 20px rgba(0, 229, 255, 0.1);
+            position: relative;
+            backdrop-filter: blur(5px);
+            
+            /* 3D Properties */
+            transform-style: preserve-3d;
+            transition: transform 0.1s ease-out;
+            transform: translateZ(20px);
+        }
+
+        /* Make inner elements pop out in 3D */
+        .login-panel h1, .login-panel form, .tech-line-top, .tech-line-bottom {
+            transform: translateZ(40px);
+        }
+
+        /* Glowing Border Animation */
+        .login-panel::before {
+            content: '';
+            position: absolute;
+            top: -2px; left: -2px; right: -2px; bottom: -2px;
+            border-radius: 12px;
+            border: 2px solid var(--neon-blue);
+            box-shadow: 0 0 15px var(--neon-blue);
+            opacity: 0.5;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Abstract Tech Lines on Panel */
+        .tech-line-top, .tech-line-bottom {
+            position: absolute;
+            width: 120px;
+            height: 2px;
+            background: var(--neon-blue);
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 0 0 10px var(--neon-blue);
+        }
+        .tech-line-top { top: 15px; }
+        .tech-line-bottom { bottom: 15px; }
+
+        .tech-line-top::before, .tech-line-top::after,
+        .tech-line-bottom::before, .tech-line-bottom::after {
+            content: '';
+            position: absolute;
+            width: 6px; height: 6px;
+            background: var(--neon-blue);
+            transform: rotate(45deg);
+            top: -2px;
+        }
+        .tech-line-top::before { left: -10px; }
+        .tech-line-top::after { right: -10px; }
+        .tech-line-bottom::before { left: -10px; }
+        .tech-line-bottom::after { right: -10px; }
+
+
+        h1 {
+            font-family: 'Orbitron', sans-serif;
+            text-align: center;
+            font-size: 1.8rem;
+            letter-spacing: 3px;
+            margin-bottom: 35px;
+            color: #ffffff;
+            text-shadow: 0 0 10px var(--neon-blue);
+        }
+
+        .input-group {
+            position: relative;
+            margin-bottom: 25px;
+        }
+
+        .input-group i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--neon-blue);
+            font-size: 1.1rem;
+        }
+
+        .input-group input {
+            width: 100%;
+            background: rgba(0, 30, 50, 0.6);
+            border: 1px solid var(--neon-dark);
+            color: #ffffff;
+            padding: 12px 15px 12px 45px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 500;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .input-group input::placeholder {
+            color: rgba(0, 229, 255, 0.4);
+        }
+
+        .input-group input:focus {
+            border-color: var(--neon-blue);
+            background: rgba(0, 50, 80, 0.8);
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.3);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: rgba(0, 229, 255, 0.1);
+            color: var(--neon-blue);
+            border: 1px solid var(--neon-blue);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.1rem;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            margin-top: 10px;
+        }
+
+        .btn:hover {
+            background: var(--neon-blue);
+            color: #000;
+            box-shadow: 0 0 20px var(--neon-blue);
+        }
+
+        .error-msg {
+            color: #ff3366;
+            font-size: 0.95rem;
+            margin-top: 15px;
+            text-align: center;
+            text-shadow: 0 0 5px rgba(255, 51, 102, 0.5);
+            display: none;
+            font-weight: 600;
+        }
+
+        .error-msg.visible {
+            display: block;
+        }
+        
+        /* Side Decoration Lines (Circuit aesthetic) */
+        .circuit-line {
+            position: absolute;
+            width: 150px;
+            height: 2px;
+            background: var(--neon-blue);
+            top: 50%;
+            z-index: 0;
+            box-shadow: 0 0 10px var(--neon-blue);
+            opacity: 0.7;
+        }
+        .circuit-line.left {
+            right: 100%;
+            margin-right: 10px;
+        }
+        .circuit-line.right {
+            left: 100%;
+            margin-left: 10px;
+        }
+        .circuit-dot {
+            position: absolute;
+            width: 8px; height: 8px;
+            background: #fff;
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--neon-blue);
+            top: -3px;
+        }
+        .circuit-line.left .circuit-dot { left: 0; }
+        .circuit-line.right .circuit-dot { right: 0; }
+
+    </style>
+</head>
+<body>
+
+    <div class="cyber-bg"></div>
+
+    <div class="login-wrapper">
+        <div class="circuit-line left"><div class="circuit-dot"></div></div>
+        
+        <div class="login-panel">
+            <div class="tech-line-top"></div>
+            
+            <h1>LOGIN</h1>
+
+            <form id="loginForm">
+                <div class="input-group">
+                    <i class="fas fa-user"></i>
+                    <input type="text" id="username" placeholder="USERNAME" autocomplete="off" spellcheck="false" required>
+                </div>
+                
+                <div class="input-group">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="password" placeholder="PASSWORD" required>
+                </div>
+
+                <button type="submit" class="btn" id="loginBtn">AUTHENTICATE</button>
+                <div class="error-msg" id="errorMsg">ACCESS DENIED</div>
+            </form>
+
+            <div class="tech-line-bottom"></div>
+        </div>
+
+        <div class="circuit-line right"><div class="circuit-dot"></div></div>
+    </div>
+
+    <script>
+        // --- 3D TILT EFFECT ---
+        const wrapper = document.querySelector('.login-wrapper');
+        const panel = document.querySelector('.login-panel');
+        
+        document.addEventListener('mousemove', (e) => {
+            const xAxis = (window.innerWidth / 2 - e.pageX) / 25; // How much it tilts left/right
+            const yAxis = (window.innerHeight / 2 - e.pageY) / 25; // How much it tilts up/down
+            
+            panel.style.transform = `rotateY(${xAxis}deg) rotateX(${yAxis}deg) translateZ(20px)`;
+        });
+
+        // Reset tilt when mouse leaves window
+        document.addEventListener('mouseleave', () => {
+            panel.style.transition = 'transform 0.5s ease';
+            panel.style.transform = `rotateY(0deg) rotateX(0deg) translateZ(20px)`;
+            setTimeout(() => { panel.style.transition = 'transform 0.1s ease-out'; }, 500);
+        });
+        
+        // --- LOGIN LOGIC ---
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('loginBtn');
+            const errorMsg = document.getElementById('errorMsg');
+            
+            btn.innerHTML = 'VERIFYING...';
+            errorMsg.classList.remove('visible');
+
+            const u = document.getElementById('username').value;
+            const p = document.getElementById('password').value;
+
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: u, password: p })
+                });
+                
+                const data = await res.json();
+                
+                if (data.success) {
+                    btn.innerHTML = 'GRANTED';
+                    btn.style.background = 'var(--neon-blue)';
+                    btn.style.color = '#000';
+                    setTimeout(() => window.location.href = '/dashboard', 500);
+                } else {
+                    btn.innerHTML = 'AUTHENTICATE';
+                    errorMsg.classList.add('visible');
+                    // Shake effect
+                    document.querySelector('.login-panel').animate([
+                        { transform: 'translateX(5px)' },
+                        { transform: 'translateX(-5px)' },
+                        { transform: 'translateX(5px)' },
+                        { transform: 'translateX(0)' }
+                    ], { duration: 200 });
+                }
+            } catch (err) {
+                btn.innerHTML = 'AUTHENTICATE';
+                errorMsg.innerText = 'SYSTEM OFFLINE';
+                errorMsg.classList.add('visible');
+            }
+        });
+    </script>
+</body>
+</html>

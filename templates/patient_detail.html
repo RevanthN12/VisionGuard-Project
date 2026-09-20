@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row g-4 mb-4">
+    <!-- Patient Info Card -->
+    <div class="col-md-4">
+        <div class="glass-panel p-4">
+            <div class="text-center mb-3">
+                <div class="icon-box bg-primary bg-opacity-25 text-primary mx-auto mb-2" style="width: 70px; height: 70px; font-size: 2rem;">
+                    <i class="fa-solid fa-user-doctor"></i>
+                </div>
+                <h4 class="fw-bold m-0">{{ patient.full_name }}</h4>
+                <span class="badge bg-secondary mt-1">{{ patient.patient_uid }}</span>
+            </div>
+
+            <hr class="border-secondary opacity-25">
+
+            <div class="small text-secondary space-y-2">
+                <p class="mb-2"><strong>Age / Gender:</strong> {{ patient.age }} yrs / {{ patient.gender }}</p>
+                <p class="mb-2"><strong>Diabetes Type:</strong> {{ patient.diabetes_type }}</p>
+                <p class="mb-2"><strong>HbA1c Level:</strong> <span class="text-warning fw-bold">{{ patient.hb1ac }}%</span></p>
+                <p class="mb-2"><strong>Email:</strong> {{ patient.email or 'N/A' }}</p>
+                <p class="mb-2"><strong>Contact:</strong> {{ patient.contact_number or 'N/A' }}</p>
+                <p class="mb-0"><strong>Medical History:</strong> {{ patient.medical_history or 'None documented' }}</p>
+            </div>
+
+            <div class="mt-4">
+                <a href="/scan" class="btn btn-primary w-100 mb-2"><i class="fa-solid fa-plus me-2"></i> Perform New Retinal Scan</a>
+                <a href="/compare/{{ patient.id }}" class="btn btn-outline-warning w-100"><i class="fa-solid fa-code-compare me-2"></i> Compare Scans</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Retinal Scan History Timeline -->
+    <div class="col-md-8">
+        <div class="glass-panel p-4">
+            <h5 class="fw-bold mb-4"><i class="fa-solid fa-clock-rotate-left text-info me-2"></i> Retinal Scan History</h5>
+
+            <div class="row g-3">
+                {% for scan in patient.scans %}
+                <div class="col-12">
+                    <div class="p-3 border border-secondary border-opacity-25 rounded bg-dark d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="scan-img-box" style="width: 80px; height: 80px;">
+                                <img src="{{ scan.image_path }}" alt="Retinal Fundus">
+                            </div>
+                            <div>
+                                <h6 class="fw-bold m-0">{{ scan.prediction_label }}</h6>
+                                <span class="badge {% if scan.prediction_class == 0 %}bg-success{% elif scan.prediction_class == 1 %}bg-info{% elif scan.prediction_class == 2 %}bg-warning{% else %}bg-danger{% endif %} me-2">
+                                    {{ scan.severity }}
+                                </span>
+                                <small class="text-info fw-bold">{{ scan.confidence }}% Confidence</small>
+                                <div class="text-secondary small mt-1">Scan Date: {{ scan.scan_date[:16] }}</div>
+                            </div>
+                        </div>
+                        <div>
+                            <a href="/reports/download/{{ scan.id }}" class="btn btn-outline-primary btn-sm me-2"><i class="fa-solid fa-file-pdf me-1"></i> PDF</a>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center py-5 text-secondary">
+                    <i class="fa-solid fa-eye-slash display-4 mb-2 opacity-25"></i>
+                    <p>No retinal scan records found for this patient.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Left Column: Patient Selection & Upload Dropzone -->
+    <div class="col-md-5">
+        <div class="glass-panel p-4">
+            <h5 class="fw-bold mb-3"><i class="fa-solid fa-microscope text-primary me-2"></i> Retinal Image Analysis</h5>
+            
+            <form id="scanForm">
+                <!-- Patient Selector -->
+                <div class="mb-3">
+                    <label class="form-label text-secondary small fw-medium">Select Patient</label>
+                    <select id="patientSelect" class="form-select bg-dark text-white border-secondary" required>
+                        <option value="">-- Choose Patient --</option>
+                        {% for p in patients %}
+                        <option value="{{ p.id }}">{{ p.full_name }} ({{ p.patient_uid }}) - {{ p.age }}y/{{ p.gender }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Drag & Drop Upload Zone -->
+                <div class="mb-3">
+                    <label class="form-label text-secondary small fw-medium" data-i18n="upload_title">Drag & Drop Retinal Image</label>
+                    <div id="retinalDropzone" class="dropzone">
+                        <i class="fa-solid fa-cloud-arrow-up display-5 text-primary mb-2"></i>
+                        <h6>Click or Drag Fundus Image Here</h6>
+                        <small class="text-secondary" data-i18n="upload_subtitle">Supports PNG, JPG, JPEG, TIFF (Max 16MB)</small>
+                        <input type="file" id="retinalFileInput" accept="image/*" class="d-none">
+                    </div>
+                </div>
+
+                <!-- Image Preview Container -->
+                <div id="imagePreviewBox" class="mb-3 d-none">
+                    <label class="form-label text-secondary small">Uploaded Image Preview</label>
+                    <div class="scan-img-box">
+                        <img id="previewImg" src="" alt="Retinal Preview">
+                    </div>
+                </div>
+
+                <!-- Doctor Notes -->
+                <div class="mb-3">
+                    <label class="form-label text-secondary small">Doctor Notes (Optional)</label>
+                    <textarea id="doctorNotes" class="form-control bg-dark text-white border-secondary" rows="2" placeholder="Clinical observation, patient symptoms..."></textarea>
+                </div>
+
+                <button type="submit" id="btnAnalyze" class="btn btn-primary w-100 py-2 fw-semibold">
+                    <i class="fa-solid fa-wand-magic-sparkles me-2"></i> <span data-i18n="analyze_btn">Run AI Prediction & Grad-CAM</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Right Column: Prediction Results & Grad-CAM Overlay -->
+    <div class="col-md-7 position-relative">
+        <!-- Spinner Overlay -->
+        <div id="spinnerOverlay" class="spinner-overlay d-none">
+            <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+            <h5 class="fw-bold">Analyzing Retinal Microvasculature...</h5>
+            <p class="text-secondary small">Applying CLAHE enhancement & computing Grad-CAM feature heatmaps</p>
+        </div>
+
+        <div id="resultCard" class="glass-panel p-4 d-none">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <h5 class="fw-bold m-0"><i class="fa-solid fa-square-poll-vertical me-2 text-info"></i> Diagnostic Results</h5>
+                <span id="resTimeBadge" class="badge bg-secondary">Execution: -- ms</span>
+            </div>
+
+            <!-- Severity & Confidence Metric Bar -->
+            <div class="row g-2 mb-4">
+                <div class="col-6">
+                    <div class="p-3 border border-secondary border-opacity-25 rounded bg-dark">
+                        <small class="text-secondary">Diagnosis & Severity</small>
+                        <h4 id="resDiagnosis" class="fw-bold m-0 mt-1">--</h4>
+                        <span id="resSeverityBadge" class="badge bg-primary">--</span>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="p-3 border border-secondary border-opacity-25 rounded bg-dark">
+                        <small class="text-secondary">Model Confidence</small>
+                        <h4 id="resConfidence" class="fw-bold text-info m-0 mt-1">0%</h4>
+                        <small id="resRiskLevel" class="text-secondary">Risk: --</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grad-CAM Visual Heatmap -->
+            <div class="row g-3 mb-4">
+                <div class="col-6 text-center">
+                    <small class="text-secondary d-block mb-1">Original Retinal Scan</small>
+                    <div class="scan-img-box">
+                        <img id="resOriginalImg" src="" alt="Original Fundus">
+                    </div>
+                </div>
+                <div class="col-6 text-center">
+                    <small class="text-secondary d-block mb-1">Grad-CAM Heatmap Overlay</small>
+                    <div class="scan-img-box">
+                        <img id="resGradcamImg" src="" alt="Grad-CAM Heatmap">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recommendations Block -->
+            <div class="p-3 border border-secondary border-opacity-25 rounded bg-dark mb-4">
+                <h6 class="fw-bold text-info mb-2"><i class="fa-solid fa-stethoscope me-2"></i> Smart Clinical Recommendations</h6>
+                <div id="resRecsList" class="small text-secondary">
+                    <!-- Dynamic List -->
+                </div>
+            </div>
+
+            <!-- Action Buttons: Download PDF / Email -->
+            <div class="d-flex gap-2">
+                <a id="btnDownloadPdf" href="#" class="btn btn-success flex-grow-1"><i class="fa-solid fa-file-pdf me-2"></i> <span data-i18n="download_pdf">Download PDF Report</span></a>
+                <button id="btnEmailReport" class="btn btn-outline-info"><i class="fa-solid fa-paper-plane me-2"></i> Email Patient</button>
+            </div>
+        </div>
+
+        <div id="placeholderResult" class="glass-panel p-5 text-center h-100 d-flex flex-column align-items-center justify-content-center">
+            <i class="fa-solid fa-eye display-1 text-secondary opacity-25 mb-3"></i>
+            <h5 class="text-secondary">No Active Retinal Scan</h5>
+            <p class="text-secondary small">Select a patient and upload a retinal fundus image on the left to run AI detection.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentScanId = null;
+
+    document.getElementById('scanForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const patientId = document.getElementById('patientSelect').value;
+        const fileInput = document.getElementById('retinalFileInput');
+        const notes = document.getElementById('doctorNotes').value;
+
+        if (!patientId) {
+            alert("Please select a patient.");
+            return;
+        }
+
+        if (fileInput.files.length === 0) {
+            alert("Please select or drop a retinal fundus image.");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('patient_id', patientId);
+        formData.append('file', fileInput.files[0]);
+        formData.append('doctor_notes', notes);
+
+        document.getElementById('spinnerOverlay').classList.remove('d-none');
+
+        try {
+            const res = await fetch('/api/predict', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            document.getElementById('spinnerOverlay').classList.add('d-none');
+
+            if (data.success) {
+                currentScanId = data.scan_id;
+                document.getElementById('placeholderResult').classList.add('d-none');
+                document.getElementById('resultCard').classList.remove('d-none');
+
+                document.getElementById('resDiagnosis').textContent = data.prediction.class_name;
+                document.getElementById('resDiagnosis').style.color = data.prediction.color;
+                document.getElementById('resSeverityBadge').textContent = data.prediction.severity;
+                document.getElementById('resConfidence').textContent = data.prediction.confidence + '%';
+                document.getElementById('resRiskLevel').textContent = 'Risk Level: ' + data.prediction.risk_level;
+                document.getElementById('resTimeBadge').textContent = 'Execution: ' + data.prediction.execution_time_ms + ' ms';
+
+                document.getElementById('resOriginalImg').src = data.image_url;
+                document.getElementById('resGradcamImg').src = data.gradcam_url;
+
+                document.getElementById('btnDownloadPdf').href = '/reports/download/' + currentScanId;
+
+                // Build Recommendations
+                const r = data.recommendations;
+                let recHtml = `<p class="mb-1 fw-semibold text-white">${r.summary}</p>`;
+                recHtml += `<ul class="ps-3 mb-0">`;
+                recHtml += `<li><b>Blood Sugar:</b> ${r.blood_sugar}</li>`;
+                recHtml += `<li><b>Diet:</b> ${r.diet}</li>`;
+                recHtml += `<li><b>Eye Care:</b> ${r.eye_care}</li>`;
+                recHtml += `<li><b>Follow-Up:</b> <span class="badge bg-primary">${r.follow_up}</span></li>`;
+                if (r.emergency_warning) {
+                    recHtml += `<li class="text-danger mt-1"><b>⚠️ EMERGENCY:</b> ${r.emergency_warning}</li>`;
+                }
+                recHtml += `</ul>`;
+                document.getElementById('resRecsList').innerHTML = recHtml;
+            } else {
+                alert("Error: " + data.error);
+            }
+        } catch (err) {
+            document.getElementById('spinnerOverlay').classList.add('d-none');
+            alert("Prediction request failed: " + err);
+        }
+    });
+
+    document.getElementById('btnEmailReport').addEventListener('click', async () => {
+        if (!currentScanId) return;
+        const res = await fetch(`/api/reports/email/${currentScanId}`, { method: 'POST' });
+        const data = await res.json();
+        alert(data.message);
+    });
+</script>
+{% endblock %}

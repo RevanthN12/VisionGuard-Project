@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VisionGuard — Medical AI Platform</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Google Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar glass-panel">
+        <div class="d-flex align-items-center gap-2 mb-4 px-2">
+            <i class="fa-solid fa-eye-low-vision text-primary fs-3"></i>
+            <div>
+                <h5 class="fw-bold m-0" data-i18n="brand">VisionGuard</h5>
+                <small class="text-secondary">Medical AI Platform</small>
+            </div>
+        </div>
+
+        <nav class="nav flex-column">
+            <a class="nav-link {% if request.path == '/dashboard' or request.path == '/' %}active{% endif %}" href="/dashboard">
+                <i class="fa-solid fa-chart-line"></i> <span data-i18n="dashboard">Dashboard</span>
+            </a>
+            <a class="nav-link {% if request.path == '/scan' %}active{% endif %}" href="/scan">
+                <i class="fa-solid fa-microscope"></i> <span data-i18n="new_scan">New Retinal Scan</span>
+            </a>
+            <a class="nav-link {% if request.path.startswith('/patients') %}active{% endif %}" href="/patients">
+                <i class="fa-solid fa-hospital-user"></i> <span data-i18n="patients">Patient Directory</span>
+            </a>
+            <a class="nav-link {% if request.path == '/chatbot' %}active{% endif %}" href="/chatbot">
+                <i class="fa-solid fa-user-doctor"></i> <span data-i18n="chatbot">AI Medical Assistant</span>
+            </a>
+            {% if session.get('role') == 'admin' %}
+            <a class="nav-link {% if request.path == '/audit' %}active{% endif %}" href="/audit">
+                <i class="fa-solid fa-shield-halved"></i> <span data-i18n="audit">Audit Logs</span>
+            </a>
+            {% endif %}
+        </nav>
+
+        <div class="mt-auto pt-4 border-top border-secondary border-opacity-25">
+            <div class="d-flex align-items-center justify-content-between mb-3 px-2">
+                <small class="text-secondary"><i class="fa-solid fa-user"></i> {{ session.get('full_name', 'Doctor') }}</small>
+                <span class="badge bg-primary text-uppercase">{{ session.get('role', 'doctor') }}</span>
+            </div>
+            <a href="/logout" class="btn btn-outline-danger btn-sm w-100"><i class="fa-solid fa-right-from-bracket"></i> <span data-i18n="logout">Logout</span></a>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <!-- Top Navbar Header -->
+        <header class="d-flex align-items-center justify-content-between mb-4 glass-panel p-3">
+            <div class="d-flex align-items-center gap-3">
+                <h4 class="fw-bold m-0">Diabetic Retinopathy Clinical System</h4>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <!-- i18n Language Switcher -->
+                <select id="langSelect" class="form-select form-select-sm bg-dark text-white border-secondary" style="width: 120px;">
+                    <option value="en">English</option>
+                    <option value="kn">ಕನ್ನಡ (KN)</option>
+                    <option value="hi">हिंदी (HI)</option>
+                </select>
+
+                <!-- Theme Toggle Button -->
+                <button id="themeToggleBtn" class="btn btn-sm btn-outline-secondary">
+                    <span id="themeIcon">☀️ Light</span>
+                </button>
+            </div>
+        </header>
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Bootstrap 5 Bundle JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/main.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

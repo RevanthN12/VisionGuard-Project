@@ -1,0 +1,8 @@
+names:
+- gun
+- knife
+- hazardous_package
+nc: 3
+path: C:\Users\sujal\Desktop\projectrevanth\VisionGuard_Project\synthetic_threat_dataset
+train: images/train
+val: images/val

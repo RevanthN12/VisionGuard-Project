@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+    <!-- Metric 1: Total Patients -->
+    <div class="col-md-3">
+        <div class="glass-panel metric-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <span class="text-secondary small fw-medium" data-i18n="total_patients">Total Patients</span>
+                    <h2 class="fw-bold m-0 mt-1">{{ stats.total_patients }}</h2>
+                </div>
+                <div class="icon-box bg-primary bg-opacity-25 text-primary">
+                    <i class="fa-solid fa-users"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metric 2: Total Scans -->
+    <div class="col-md-3">
+        <div class="glass-panel metric-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <span class="text-secondary small fw-medium" data-i18n="total_scans">Total Scans</span>
+                    <h2 class="fw-bold m-0 mt-1">{{ stats.total_scans }}</h2>
+                </div>
+                <div class="icon-box bg-info bg-opacity-25 text-info">
+                    <i class="fa-solid fa-eye"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metric 3: Positive DR Cases -->
+    <div class="col-md-3">
+        <div class="glass-panel metric-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <span class="text-secondary small fw-medium" data-i18n="positive_cases">Positive DR Cases</span>
+                    <h2 class="fw-bold text-danger m-0 mt-1">{{ stats.positive_cases }}</h2>
+                    <small class="text-secondary">{{ stats.positive_rate }}% positive rate</small>
+                </div>
+                <div class="icon-box bg-danger bg-opacity-25 text-danger">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metric 4: Negative Cases (Normal) -->
+    <div class="col-md-3">
+        <div class="glass-panel metric-card">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <span class="text-secondary small fw-medium" data-i18n="negative_cases">No DR (Normal)</span>
+                    <h2 class="fw-bold text-success m-0 mt-1">{{ stats.negative_cases }}</h2>
+                </div>
+                <div class="icon-box bg-success bg-opacity-25 text-success">
+                    <i class="fa-solid fa-circle-check"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts & Analytics Row -->
+<div class="row g-3 mb-4">
+    <!-- Chart 1: Severity Distribution -->
+    <div class="col-md-5">
+        <div class="glass-panel p-4 h-100">
+            <h5 class="fw-bold mb-3">Disease Severity Breakdown</h5>
+            <div class="position-relative" style="max-height: 260px;">
+                <canvas id="chartSeverity"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Action / AI Info Card -->
+    <div class="col-md-7">
+        <div class="glass-panel p-4 h-100 d-flex flex-column justify-content-between">
+            <div>
+                <span class="badge bg-primary mb-2">AI Clinical Guidance</span>
+                <h4 class="fw-bold">Explainable AI & Grad-CAM Visualization</h4>
+                <p class="text-secondary">
+                    VisionGuard utilizes deep learning neural networks combined with Class Activation Mapping (Grad-CAM) to pinpoint microaneurysms, hemorrhages, and hard exudates in retinal fundus images in real time.
+                </p>
+            </div>
+            <div class="d-flex gap-3">
+                <a href="/scan" class="btn btn-primary px-4 py-2 fw-semibold"><i class="fa-solid fa-plus me-2"></i> Start New Retinal Scan</a>
+                <a href="/chatbot" class="btn btn-outline-secondary px-4 py-2"><i class="fa-solid fa-comments me-2"></i> Open Medical Chatbot</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Scans Table -->
+<div class="glass-panel p-4">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="fw-bold m-0">Recent Retinal Scans</h5>
+        <a href="/patients" class="btn btn-sm btn-outline-secondary">View All Patients</a>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-dark table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>Patient Name</th>
+                    <th>ID</th>
+                    <th>Diagnosis</th>
+                    <th>Severity</th>
+                    <th>Confidence</th>
+                    <th>Scan Date</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for scan in stats.recent_scans %}
+                <tr>
+                    <td><strong>{{ scan.patient_name }}</strong></td>
+                    <td><span class="badge bg-secondary">{{ scan.patient_uid }}</span></td>
+                    <td>{{ scan.prediction_label }}</td>
+                    <td>
+                        <span class="badge 
+                            {% if scan.prediction_class == 0 %}bg-success
+                            {% elif scan.prediction_class == 1 %}bg-info
+                            {% elif scan.prediction_class == 2 %}bg-warning
+                            {% else %}bg-danger{% endif %}">
+                            {{ scan.severity }}
+                        </span>
+                    </td>
+                    <td><span class="text-info fw-bold">{{ scan.confidence }}%</span></td>
+                    <td><small class="text-secondary">{{ scan.scan_date[:16] }}</small></td>
+                    <td>
+                        <a href="/reports/download/{{ scan.id }}" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-file-pdf me-1"></i> PDF</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="7" class="text-center text-secondary py-4">No recent scans recorded. Click "Start New Retinal Scan" above.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    window.severityData = {{ stats.severity_distribution | tojson }};
+</script>
+{% endblock %}

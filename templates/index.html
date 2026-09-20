@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="CrowdWatch AI V2 — Intelligent Vision-Based Crowd Monitoring and Public Safety Risk Detection System">
+    <title>CrowdWatch AI V2 — Public Safety Monitoring</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body>
+<div class="app-layout">
+
+<!-- ═══════════════════════════════════════════════════════════ SIDEBAR -->
+<aside class="sidebar">
+    <div class="logo">
+        <i class="fa-solid fa-shield-halved"></i>
+        <span>CrowdWatch <span class="accent">AI</span> <sup>V2</sup></span>
+    </div>
+
+    <nav class="side-nav">
+        <a href="#live" class="nav-link active"><i class="fa-solid fa-video"></i> Live Monitor</a>
+        <a href="#analytics" class="nav-link"><i class="fa-solid fa-chart-line"></i> Analytics</a>
+        <a href="#evidence" class="nav-link"><i class="fa-solid fa-folder-open"></i> Evidence</a>
+        <a href="#alerts-section" class="nav-link"><i class="fa-solid fa-bell"></i> Alert Logs</a>
+        <a href="#objectives" class="nav-link"><i class="fa-solid fa-bullseye"></i> Objectives</a>
+    </nav>
+
+    <!-- System status -->
+    <div class="sys-panel">
+        <div class="sys-heading">SYSTEM STATUS</div>
+        <div class="sys-row"><span>AI Engine</span><span class="badge green" id="badge-engine">ONLINE</span></div>
+        <div class="sys-row"><span>Weapon Model</span><span class="badge green">LOADED</span></div>
+        <div class="sys-row"><span>Database</span><span class="badge green">SQLite</span></div>
+        <div class="sys-row"><span>Tracker</span><span class="badge green">ByteTrack</span></div>
+    </div>
+
+    <!-- Decibel gauge -->
+    <div class="sys-panel noise-panel">
+        <div class="sys-heading"><i class="fa-solid fa-wave-square"></i> NOISE MONITOR</div>
+        <div class="db-meter-wrapper">
+            <div class="db-bar-bg">
+                <div class="db-bar-fill" id="db-fill" style="width:35%"></div>
+            </div>
+            <span class="db-label" id="db-label">48 dB</span>
+        </div>
+        <div class="sys-row" style="font-size:0.7rem; color: var(--muted)">Detects screams / gunshots via spikes</div>
+    </div>
+
+    <!-- AI Chatbot -->
+    <div class="chat-widget">
+        <div class="chat-header"><i class="fa-solid fa-robot"></i> AI Safety Assistant</div>
+        <div class="chat-body" id="chatbot-messages">
+            <div class="msg bot">Hello! I can query the security database. Ask about past alerts, crowd peaks, or risk explanations.</div>
+        </div>
+        <div class="chat-input-row">
+            <input id="chat-input" type="text" placeholder="Ask a security question…">
+            <button id="chat-send"><i class="fa-solid fa-paper-plane"></i></button>
+        </div>
+    </div>
+</aside>
+
+<!-- ═══════════════════════════════════════════════════════════ MAIN -->
+<main class="main">
+
+    <!-- Header -->
+    <header class="top-bar">
+        <div>
+            <h1>CCTV Intelligent Vision Dashboard</h1>
+            <p class="sub">Real-time Person Tracking • Weapon Detection • Violence & Panic Analysis • Risk Prediction</p>
+        </div>
+        <div class="header-right">
+            <span id="live-clock" class="mono-clock">--:--:--</span>
+            <div class="global-risk" id="global-risk-badge">
+                RISK: <span id="risk-label">LOW</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- KPI Cards -->
+    <section class="kpi-grid" id="live">
+        <div class="kpi-card" id="kpi-feed">
+            <div class="kpi-icon i-blue"><i class="fa-solid fa-camera"></i></div>
+            <div><div class="kpi-title">ACTIVE SOURCE</div><div class="kpi-val" id="kpi-source">Webcam #0</div></div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon i-green"><i class="fa-solid fa-users"></i></div>
+            <div><div class="kpi-title">CROWD COUNT</div><div class="kpi-val" id="kpi-count">0</div></div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon i-purple"><i class="fa-solid fa-gun"></i></div>
+            <div><div class="kpi-title">WEAPONS</div><div class="kpi-val" id="kpi-weapons">0</div></div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon i-orange"><i class="fa-solid fa-person-running"></i></div>
+            <div><div class="kpi-title">PANIC SCORE</div><div class="kpi-val" id="kpi-panic">0%</div></div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-icon i-red"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <div><div class="kpi-title">RISK SCORE</div><div class="kpi-val" id="kpi-risk">0%</div></div>
+        </div>
+    </section>
+
+    <!-- Live feed + right panel -->
+    <section class="feed-row">
+        <!-- Video -->
+        <div class="card video-card">
+            <div class="card-hdr">
+                <h2><i class="fa-solid fa-play-circle"></i> Live CCTV Analytics Feed</h2>
+                <div class="src-btns">
+                    <button class="src-btn active" id="btn-webcam"><i class="fa-solid fa-video"></i> WebCam 1</button>
+                    <button class="src-btn" id="btn-webcam-2"><i class="fa-solid fa-video"></i> WebCam 2</button>
+                    <label class="src-btn" for="file-upload-input"><i class="fa-solid fa-upload"></i> Upload</label>
+                    <input type="file" id="file-upload-input" accept="video/*" style="display:none">
+                    <button class="src-btn" id="btn-grid-toggle"><i class="fa-solid fa-border-all"></i> Grid</button>
+                </div>
+            </div>
+            <div class="video-wrap">
+                <img src="/video_feed" id="video-feed-img" alt="Live CCTV Feed">
+                <div class="hud-top">
+                    <span class="hud-chip"><i class="fa-solid fa-circle blink-red"></i> LIVE REC</span>
+                    <span class="hud-chip" id="hud-state">SYSTEM: INITIALISING</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right panel: gauges + risk -->
+        <div class="right-col">
+            <!-- Gauge panel -->
+            <div class="card gauge-card">
+                <div class="card-hdr"><h2><i class="fa-solid fa-gauge-high"></i> Safety Gauges</h2></div>
+                <div class="gauges">
+                    <div class="gauge-item">
+                        <div class="g-label"><span>Crowd Density</span><span id="g-density-val">0%</span></div>
+                        <div class="bar-bg"><div class="bar-fill" id="bar-density"></div></div>
+                    </div>
+                    <div class="gauge-item">
+                        <div class="g-label"><span>Violence Index</span><span id="g-violence-val">NORMAL</span></div>
+                        <div class="bar-bg"><div class="bar-fill violence-bar" id="bar-violence"></div></div>
+                    </div>
+                    <div class="gauge-item">
+                        <div class="g-label"><span>Panic / Dispersion</span><span id="g-panic-val">NORMAL</span></div>
+                        <div class="bar-bg"><div class="bar-fill panic-bar" id="bar-panic"></div></div>
+                    </div>
+                    <div class="gauge-item">
+                        <div class="g-label"><span>Noise Level</span><span id="g-noise-val">48 dB</span></div>
+                        <div class="bar-bg"><div class="bar-fill noise-bar" id="bar-noise"></div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Risk explanation -->
+            <div class="card risk-explain-card">
+                <div class="card-hdr"><h2><i class="fa-solid fa-shield-halved"></i> Risk Assessment</h2></div>
+                <div class="risk-level-display" id="risk-display">LOW</div>
+                <div class="risk-reason" id="risk-reason-text">No active threats detected. System monitoring active.</div>
+                <div class="risk-action" id="risk-action-text">Routine surveillance monitoring active.</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Simulation Console -->
+    <section class="card sim-card">
+        <div class="card-hdr">
+            <h2><i class="fa-solid fa-sliders"></i> Demonstration & Simulation Console</h2>
+        </div>
+        <div class="sim-grid">
+            <div class="sim-item">
+                <label class="toggle"><input type="checkbox" id="tog-weapon"><span class="slider"></span></label>
+                <div><div class="sim-name"><i class="fa-solid fa-gun" style="color:#a855f7"></i> Weapon Threat</div><div class="sim-desc">Inject gun detection event → CRITICAL risk</div></div>
+            </div>
+            <div class="sim-item">
+                <label class="toggle"><input type="checkbox" id="tog-violence"><span class="slider"></span></label>
+                <div><div class="sim-name"><i class="fa-solid fa-hand-fist" style="color:#f59e0b"></i> Physical Fight</div><div class="sim-desc">Simulate combat altercation → HIGH risk</div></div>
+            </div>
+            <div class="sim-item">
+                <label class="toggle"><input type="checkbox" id="tog-panic"><span class="slider"></span></label>
+                <div><div class="sim-name"><i class="fa-solid fa-person-running" style="color:#ef4444"></i> Panic Evacuation</div><div class="sim-desc">Simulate stampede behavior → HIGH risk</div></div>
+            </div>
+            <div class="sim-item">
+                <label class="toggle"><input type="checkbox" id="tog-scream"><span class="slider"></span></label>
+                <div><div class="sim-name"><i class="fa-solid fa-volume-high" style="color:#06b6d4"></i> Scream / Gunshot</div><div class="sim-desc">Spike decibel meter above 100 dB</div></div>
+            </div>
+            <div class="sim-params">
+                <div class="param-row">
+                    <label>Zone Capacity Limit</label>
+                    <input type="range" id="cap-slider" min="5" max="100" value="20">
+                    <span class="param-val" id="cap-val">20</span>
+                </div>
+                <div class="param-row">
+                    <label>Density Alert %</label>
+                    <input type="range" id="dens-slider" min="20" max="100" value="80">
+                    <span class="param-val" id="dens-val">80%</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Analytics + Evidence -->
+    <section class="dual-row" id="analytics">
+        <div class="card chart-card">
+            <div class="card-hdr">
+                <h2><i class="fa-solid fa-chart-area"></i> Historical Crowd & Risk Trends</h2>
+                <button class="icon-btn" id="btn-refresh-chart"><i class="fa-solid fa-rotate"></i></button>
+            </div>
+            <div class="chart-wrap"><canvas id="trend-chart"></canvas></div>
+        </div>
+        <div class="card alerts-card" id="alerts-section">
+            <div class="card-hdr">
+                <h2><i class="fa-solid fa-triangle-exclamation"></i> SQL Evidence Log</h2>
+                <span class="badge red" id="alert-count-badge">0 Alerts</span>
+            </div>
+            <div class="table-wrap">
+                <table class="ev-table">
+                    <thead><tr>
+                        <th>Timestamp</th><th>Type</th><th>Risk</th><th>Details</th><th>Snap</th>
+                    </tr></thead>
+                    <tbody id="alert-table-body">
+                        <tr><td colspan="5" class="placeholder">Loading database logs…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- Evidence grid -->
+    <section class="card evidence-card" id="evidence">
+        <div class="card-hdr">
+            <h2><i class="fa-solid fa-images"></i> Evidence Snapshots</h2>
+            <button class="icon-btn" id="btn-refresh-evidence"><i class="fa-solid fa-rotate"></i></button>
+        </div>
+        <div class="evidence-grid" id="evidence-grid">
+            <div class="evidence-placeholder">No evidence saved yet. Trigger a simulation to generate snapshots.</div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════════════════════ PROJECT OBJECTIVES ══════════ -->
+    <section class="card obj-card" id="objectives">
+        <div class="card-hdr">
+            <h2><i class="fa-solid fa-bullseye"></i> Project Objectives</h2>
+            <span class="obj-subtitle">Intelligent Vision-Based Crowd Monitoring &amp; Public Safety Risk Detection</span>
+        </div>
+
+        <div class="obj-grid">
+
+            <div class="obj-item" style="--c:#6366f1">
+                <div class="obj-icon"><i class="fa-solid fa-camera"></i></div>
+                <div class="obj-body">
+                    <div class="obj-num">01</div>
+                    <div class="obj-title">Real-Time AI Crowd Monitoring</div>
+                    <div class="obj-desc">Develop a real-time AI-based crowd monitoring system using video surveillance for effective crowd analysis across live camera feeds, CCTV streams, and uploaded footage.</div>
+                </div>
+            </div>
+
+            <div class="obj-item" style="--c:#10b981">
+                <div class="obj-icon"><i class="fa-solid fa-users-viewfinder"></i></div>
+                <div class="obj-body">
+                    <div class="obj-num">02</div>
+                    <div class="obj-title">Accurate Person Detection &amp; Counting</div>
+                    <div class="obj-desc">Detect and count people accurately in crowded environments using <strong>YOLOv8</strong> and <strong>OpenCV</strong>, providing per-frame tracking IDs and real-time occupancy metrics.</div>
+                </div>
+            </div>
+
+            <div class="obj-item" style="--c:#f59e0b">
+                <div class="obj-icon"><i class="fa-solid fa-gauge-high"></i></div>
+                <div class="obj-body">
+                    <div class="obj-num">03</div>
+                    <div class="obj-title">Crowd Density Estimation</div>
+                    <div class="obj-desc">Estimate crowd density levels — <span class="tag-low">Low</span> <span class="tag-med">Medium</span> <span class="tag-high">High</span> — based on detected crowd size relative to zone capacity, displayed via a 3×4 grid overlay.</div>
+                </div>
+            </div>
+
+            <div class="obj-item" style="--c:#f97316">
+                <div class="obj-icon"><i class="fa-solid fa-person-running"></i></div>
+                <div class="obj-body">
+                    <div class="obj-num">04</div>
+                    <div class="obj-title">Abnormal Crowd Behaviour Analysis</div>
+                    <div class="obj-desc">Analyze crowd movement patterns and identify abnormal behaviour — including sudden directional shifts, high-velocity dispersion, and clustering collapse — that may indicate an unsafe situation.</div>
+                </div>
+            </div>
+
+            <div class="obj-item" style="--c:#ef4444">
+                <div class="obj-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                <div class="obj-body">
+                    <div class="obj-num">05</div>
+                    <div class="obj-title">Stampede Risk Prediction &amp; Real-Time Alerts</div>
+                    <div class="obj-desc">Predict potential stampede risks using a multi-modal risk engine combining density, violence, panic, noise, and weapon signals. Generate real-time alerts with evidence snapshots to improve public safety and crowd management.</div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="obj-footer">
+            <div class="obj-tech-tag"><i class="fa-solid fa-microchip"></i> YOLOv8n</div>
+            <div class="obj-tech-tag"><i class="fa-solid fa-eye"></i> OpenCV</div>
+            <div class="obj-tech-tag"><i class="fa-solid fa-database"></i> SQLite DBMS</div>
+            <div class="obj-tech-tag"><i class="fa-solid fa-robot"></i> AI Chatbot</div>
+            <div class="obj-tech-tag"><i class="fa-solid fa-shield-halved"></i> Risk Engine</div>
+            <div class="obj-tech-tag"><i class="fa-brands fa-python"></i> Flask + Python</div>
+        </div>
+    </section>
+
+</main>
+</div>
+
+<!-- Lightbox -->
+<div id="lightbox" class="lightbox">
+    <span id="lb-close">&times;</span>
+    <div class="lb-inner">
+        <img id="lb-img" src="" alt="Evidence">
+        <div id="lb-cap"></div>
+    </div>
+</div>
+
+<!-- Hidden audio alarm -->
+<audio id="alarm-audio" loop preload="none">
+    <source src="/static/alert.mp3" type="audio/mpeg">
+</audio>
+
+<script src="/static/js/dashboard.js"></script>
+</body>
+</html>

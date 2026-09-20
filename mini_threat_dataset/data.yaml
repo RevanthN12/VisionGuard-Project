@@ -1,0 +1,7 @@
+names:
+  0: gun
+  1: knife
+path: C:\Users\user\Desktop\p!\mini_threat_dataset
+train: images\train
+val: images\val
+cd "C:\Users\user\Desktop\VisionGuard_FINAL"

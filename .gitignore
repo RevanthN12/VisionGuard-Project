@@ -1,0 +1,36 @@
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Models and Large weights
+*.pt
+models/*.pt
+models/*.onnx
+
+# Data and videos
+*.mp4
+*.webm
+*.avi
+*.mkv
+outputs/
+videos/
+database/*.db
+crowdwatch.db
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+
+# macOS
+.DS_Store

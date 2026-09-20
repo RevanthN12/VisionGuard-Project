@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="glass-panel p-4 mb-4">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+            <h4 class="fw-bold m-0"><i class="fa-solid fa-code-compare text-warning me-2"></i> Retinal Scan Comparison</h4>
+            <small class="text-secondary">Side-by-side longitudinal assessment for {{ patient.full_name }} ({{ patient.patient_uid }})</small>
+        </div>
+        <a href="/patients/{{ patient.id }}" class="btn btn-outline-secondary btn-sm">Back to Patient Profile</a>
+    </div>
+
+    <!-- Scan Selectors -->
+    <form method="GET" action="/compare/{{ patient.id }}" class="row g-3 mb-4">
+        <div class="col-md-6">
+            <label class="form-label text-secondary small">Baseline / Previous Scan</label>
+            <select name="scan1" class="form-select bg-dark text-white border-secondary" onchange="this.form.submit()">
+                {% for s in patient.scans %}
+                <option value="{{ s.id }}" {% if scan1 and s.id == scan1.id %}selected{% endif %}>Scan #{{ s.id }} - {{ s.prediction_label }} ({{ s.scan_date[:10] }})</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-6">
+            <label class="form-label text-secondary small">Current / Follow-up Scan</label>
+            <select name="scan2" class="form-select bg-dark text-white border-secondary" onchange="this.form.submit()">
+                {% for s in patient.scans %}
+                <option value="{{ s.id }}" {% if scan2 and s.id == scan2.id %}selected{% endif %}>Scan #{{ s.id }} - {{ s.prediction_label }} ({{ s.scan_date[:10] }})</option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+
+    {% if scan1 and scan2 %}
+    <div class="row g-4">
+        <!-- Scan 1 Column -->
+        <div class="col-md-6">
+            <div class="p-3 border border-secondary border-opacity-25 rounded bg-dark">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="badge bg-secondary">Baseline Scan #{{ scan1.id }}</span>
+                    <small class="text-secondary">{{ scan1.scan_date[:16] }}</small>
+                </div>
+                <h5 class="fw-bold" style="color: {{ scan1.recommendations.risk_color if scan1.recommendations else '#3b82f6' }}">{{ scan1.prediction_label }}</h5>
+                <p class="text-secondary small mb-3">Severity: {{ scan1.severity }} | Confidence: {{ scan1.confidence }}%</p>
+
+                <div class="row g-2">
+                    <div class="col-6 text-center">
+                        <small class="text-secondary d-block mb-1">Fundus Image</small>
+                        <div class="scan-img-box">
+                            <img src="{{ scan1.image_path }}" alt="Baseline Fundus">
+                        </div>
+                    </div>
+                    <div class="col-6 text-center">
+                        <small class="text-secondary d-block mb-1">Grad-CAM Overlay</small>
+                        <div class="scan-img-box">
+                            <img src="{{ scan1.gradcam_path }}" alt="Baseline Grad-CAM">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scan 2 Column -->
+        <div class="col-md-6">
+            <div class="p-3 border border-secondary border-opacity-25 rounded bg-dark">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="badge bg-primary">Follow-up Scan #{{ scan2.id }}</span>
+                    <small class="text-secondary">{{ scan2.scan_date[:16] }}</small>
+                </div>
+                <h5 class="fw-bold" style="color: {{ scan2.recommendations.risk_color if scan2.recommendations else '#3b82f6' }}">{{ scan2.prediction_label }}</h5>
+                <p class="text-secondary small mb-3">Severity: {{ scan2.severity }} | Confidence: {{ scan2.confidence }}%</p>
+
+                <div class="row g-2">
+                    <div class="col-6 text-center">
+                        <small class="text-secondary d-block mb-1">Fundus Image</small>
+                        <div class="scan-img-box">
+                            <img src="{{ scan2.image_path }}" alt="Followup Fundus">
+                        </div>
+                    </div>
+                    <div class="col-6 text-center">
+                        <small class="text-secondary d-block mb-1">Grad-CAM Overlay</small>
+                        <div class="scan-img-box">
+                            <img src="{{ scan2.gradcam_path }}" alt="Followup Grad-CAM">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-secondary">
+        <i class="fa-solid fa-code-compare display-4 mb-2 opacity-25"></i>
+        <p>At least two retinal scans are required to generate side-by-side comparison.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

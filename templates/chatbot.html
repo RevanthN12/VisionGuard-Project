@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="glass-panel p-4 style-card">
+    <div class="d-flex align-items-center gap-3 mb-4">
+        <div class="icon-box bg-info bg-opacity-25 text-info">
+            <i class="fa-solid fa-user-doctor"></i>
+        </div>
+        <div>
+            <h4 class="fw-bold m-0"><span data-i18n="chatbot">AI Medical Assistant</span></h4>
+            <small class="text-secondary">Clinical Knowledge-Base & Retinal Q&A</small>
+        </div>
+    </div>
+
+    <!-- Chat Box -->
+    <div id="chatBox" class="chat-box d-flex flex-column border border-secondary border-opacity-25 rounded bg-dark mb-3">
+        <div class="chat-bubble bot">
+            Hello! I am your <b>VisionGuard AI Clinical Assistant</b>. You can ask me questions about Diabetic Retinopathy, causes, symptoms, laser treatments, follow-up schedules, or how to interpret your scan results.
+        </div>
+    </div>
+
+    <!-- Message Input -->
+    <form id="chatForm" class="d-flex gap-2">
+        <input type="text" id="chatInput" class="form-control bg-dark text-white border-secondary" placeholder="Ask a medical question (e.g. What is diabetic retinopathy?)..." required autocomplete="off">
+        <button type="submit" class="btn btn-primary px-4"><i class="fa-solid fa-paper-plane"></i></button>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const chatBox = document.getElementById('chatBox');
+    const chatForm = document.getElementById('chatForm');
+    const chatInput = document.getElementById('chatInput');
+
+    chatForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const text = chatInput.value.trim();
+        if (!text) return;
+
+        // Append User Bubble
+        appendBubble(text, 'user');
+        chatInput.value = '';
+
+        try {
+            const res = await fetch('/api/chatbot/ask', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ message: text })
+            });
+            const data = await res.json();
+            if (data.success) {
+                appendBubble(data.reply, 'bot');
+            } else {
+                appendBubble("Sorry, I encountered an error processing your query.", 'bot');
+            }
+        } catch (err) {
+            appendBubble("Failed to connect to AI assistant.", 'bot');
+        }
+    });
+
+    function appendBubble(text, sender) {
+        const div = document.createElement('div');
+        div.className = `chat-bubble ${sender}`;
+        div.innerHTML = text.replace(/\n/g, '<br/>');
+        chatBox.appendChild(div);
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+</script>
+{% endblock %}

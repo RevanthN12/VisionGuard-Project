@@ -1,0 +1,522 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vision Guard AI — Crowd Analytics</title>
+    <!-- Modern Typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Background Elements -->
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+    <div class="bg-grid"></div>
+
+    <div class="app-container">
+        
+        <!-- Sidebar -->
+        <aside class="sidebar glass-panel">
+            <div class="brand">
+                <div class="brand-icon-wrapper">
+                    <span class="icon">🛡️</span>
+                </div>
+                <div class="brand-text">
+                    <h2>Vision Guard</h2>
+                    <p>AI Stampede Prediction</p>
+                </div>
+            </div>
+
+            <!-- Navigation Menu -->
+            <nav class="nav-menu">
+                <button class="nav-link admin-only active" onclick="switchTab('live')">🎥 Live Monitor</button>
+                <button class="nav-link" onclick="switchTab('analytics')">📈 Analytics</button>
+                <button class="nav-link" onclick="switchTab('evidence')">📁 Evidence</button>
+                <button class="nav-link" onclick="switchTab('reports')">📋 Reports</button>
+                <button class="nav-link admin-only" onclick="switchTab('chatbot')">🤖 AI Assistant</button>
+                <button class="nav-link admin-only" onclick="switchTab('settings')">⚙️ Settings</button>
+                
+                <!-- Quick Actions -->
+                <div style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px; width: 100%;">
+                    <button class="btn btn-primary" style="width: 100%; justify-content: center; font-size: 0.9rem;" onclick="downloadReport('pdf')">📄 Export PDF</button>
+                </div>
+                
+                <button class="nav-link" id="btnLogout" style="margin-top: auto; color: #ef4444; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;">🚪 Logout</button>
+            </nav>
+            
+            <div class="control-group">
+                <h3>📹 Video Source</h3>
+                <div class="input-wrapper">
+                    <select id="sourceType" onchange="toggleSourceInputs()">
+                        <option value="Webcam" selected>Webcam</option>
+                        <option value="Sample">Sample Video</option>
+                        <option value="RTSP">CCTV / RTSP URL</option>
+                    </select>
+                </div>
+                
+                <div id="webcamInput" class="input-wrapper">
+                    <input type="number" id="webcamIndex" value="0" min="0" title="Camera Index">
+                </div>
+                <div id="sampleInput" class="input-wrapper hidden">
+                    <select id="sampleFile"></select>
+                </div>
+                <div id="rtspInput" class="input-wrapper hidden">
+                    <input type="text" id="rtspUrl" placeholder="rtsp://...">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>⚙️ Controls</h3>
+                <div class="button-row" style="flex-direction: column; gap: 8px;">
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-primary" onclick="startMonitoring('camera1')" style="flex:1; font-size: 0.8rem;">▶ Cam 1</button>
+                        <button class="btn btn-secondary" onclick="stopMonitoring('camera1')" style="flex:1; font-size: 0.8rem;">⏹ Cam 1</button>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-primary" onclick="startMonitoring('camera2')" style="flex:1; font-size: 0.8rem;">▶ Cam 2</button>
+                        <button class="btn btn-secondary" onclick="stopMonitoring('camera2')" style="flex:1; font-size: 0.8rem;">⏹ Cam 2</button>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-primary" onclick="startMonitoring('both')" style="flex:1; font-size: 0.8rem;">▶ Both Cameras</button>
+                        <button class="btn btn-secondary" onclick="stopMonitoring('both')" style="flex:1; font-size: 0.8rem;">⏹ Stop Both</button>
+                    </div>
+                </div>
+            </div>
+            <div class="status-indicator">
+                <div class="dot" id="statusDot"></div>
+                <span id="statusText">MONITORING STOPPED</span>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            
+            <!-- VIEW: LIVE MONITOR -->
+            <div id="view-live" class="view-section active">
+                <header class="top-header">
+                    <h1 class="page-title">Live Monitor Dashboard</h1>
+                    <div id="alertBanner" class="alert-banner hidden">
+                        <span class="alert-icon">⚠️</span>
+                        <span class="alert-msg"></span>
+                    </div>
+                </header>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <!-- Camera 1 KPI -->
+                    <div>
+                        <h3 style="margin-bottom: 10px;">Camera 1 KPIs</h3>
+                        <div class="kpi-grid" style="grid-template-columns: repeat(2, 1fr);">
+                            <div class="kpi-card glass-panel">
+                                <div class="kpi-header"><span class="kpi-icon">👥</span><p class="kpi-label">Count</p></div>
+                                <h2 class="kpi-value" id="kpiCount-camera1">—</h2>
+                            </div>
+                            <div class="kpi-card glass-panel">
+                                <div class="kpi-header"><span class="kpi-icon">🌡️</span><p class="kpi-label">Density</p></div>
+                                <h2 class="kpi-value" id="kpiDensity-camera1">—</h2>
+                                <p class="kpi-sub" id="subDensity-camera1"></p>
+                            </div>
+                            <div class="kpi-card glass-panel">
+                                <div class="kpi-header"><span class="kpi-icon">💨</span><p class="kpi-label">Movement</p></div>
+                                <h2 class="kpi-value" id="kpiMovement-camera1">—</h2>
+                                <p class="kpi-sub" id="subMovement-camera1"></p>
+                            </div>
+                            <div class="kpi-card glass-panel risk-card" id="riskCard-camera1">
+                                <div class="kpi-header"><span class="kpi-icon">⚠️</span><p class="kpi-label">Risk</p></div>
+                                <h2 class="kpi-value" id="kpiRisk-camera1">—</h2>
+                                <p class="kpi-sub" id="subRisk-camera1"></p>
+                            </div>
+                            <div class="kpi-card glass-panel status-card" style="grid-column: span 2;">
+                                <div class="kpi-header"><span class="kpi-icon">🔰</span><p class="kpi-label">Risk Status</p></div>
+                                <h2 class="kpi-value status-value" id="kpiStatus-camera1">—</h2>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Camera 2 KPI -->
+                    <div>
+                        <h3 style="margin-bottom: 10px;">Camera 2 KPIs</h3>
+                        <div class="kpi-grid" style="grid-template-columns: repeat(2, 1fr);">
+                            <div class="kpi-card glass-panel">
+                                <div class="kpi-header"><span class="kpi-icon">👥</span><p class="kpi-label">Count</p></div>
+                                <h2 class="kpi-value" id="kpiCount-camera2">—</h2>
+                            </div>
+                            <div class="kpi-card glass-panel">
+                                <div class="kpi-header"><span class="kpi-icon">🌡️</span><p class="kpi-label">Density</p></div>
+                                <h2 class="kpi-value" id="kpiDensity-camera2">—</h2>
+                                <p class="kpi-sub" id="subDensity-camera2"></p>
+                            </div>
+                            <div class="kpi-card glass-panel">
+                                <div class="kpi-header"><span class="kpi-icon">💨</span><p class="kpi-label">Movement</p></div>
+                                <h2 class="kpi-value" id="kpiMovement-camera2">—</h2>
+                                <p class="kpi-sub" id="subMovement-camera2"></p>
+                            </div>
+                            <div class="kpi-card glass-panel risk-card" id="riskCard-camera2">
+                                <div class="kpi-header"><span class="kpi-icon">⚠️</span><p class="kpi-label">Risk</p></div>
+                                <h2 class="kpi-value" id="kpiRisk-camera2">—</h2>
+                                <p class="kpi-sub" id="subRisk-camera2"></p>
+                            </div>
+                            <div class="kpi-card glass-panel status-card" style="grid-column: span 2;">
+                                <div class="kpi-header"><span class="kpi-icon">🔰</span><p class="kpi-label">Risk Status</p></div>
+                                <h2 class="kpi-value status-value" id="kpiStatus-camera2">—</h2>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-body" style="grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <!-- Camera 1 Video -->
+                    <div class="video-container glass-panel glow-border">
+                        <div class="section-header">
+                            <div class="pulse-dot"></div>
+                            <h3>AI Video Analysis - Camera 1</h3>
+                        </div>
+                        <div class="video-wrapper">
+                            <img id="cam1-video" src="" alt="Video Feed" class="video-feed">
+                            <div class="video-overlay" id="cam1-overlay">
+                                <div class="spinner"></div>
+                                <div style="text-align: center;">
+                                    <div style="font-size: 1.5rem; margin-bottom: 8px;">📹</div>
+                                    <div style="font-weight: 600; font-size: 1rem;" id="cam1-overlay-text">CAMERA 1 OFFLINE</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="analysis-box glass-panel" style="margin-top: 15px;">
+                            <h3>🔍 Live Analysis</h3>
+                            <div class="analysis-list">
+                                <div class="analysis-item"><span class="lbl">Behavior</span><span class="val" id="lblBehavior-camera1">—</span></div>
+                                <div class="analysis-item"><span class="lbl">Congestion</span><span class="val" id="lblCongestion-camera1">—</span></div>
+                                <div class="analysis-item"><span class="lbl">Threat Status</span><span class="val" id="lblThreat-camera1">—</span></div>
+                                <div class="analysis-item"><span class="lbl">Violence</span><span class="val" id="lblViolence-camera1">—</span></div>
+                                <div class="analysis-item"><span class="lbl">Weapon</span><span class="val" id="lblWeapon-camera1">—</span></div>
+                                <div class="analysis-item"><span class="lbl">Audio (dB)</span><span class="val" id="lblAudio-camera1">—</span></div>
+                                <div class="analysis-item action-item">
+                                    <span class="lbl">Action</span>
+                                    <span class="val highlight" id="lblAction-camera1">—</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Camera 2 Video -->
+                    <div class="video-container glass-panel glow-border">
+                        <div class="section-header">
+                            <div class="pulse-dot"></div>
+                            <h3>AI Video Analysis - Camera 2</h3>
+                        </div>
+                        <div class="video-wrapper">
+                            <img id="cam2-video" src="" alt="Video Feed" class="video-feed">
+                            <div class="video-overlay" id="cam2-overlay">
+                                <div class="spinner"></div>
+                                <div style="text-align: center;">
+                                    <div style="font-size: 1.5rem; margin-bottom: 8px;">📹</div>
+                                    <div style="font-weight: 600; font-size: 1rem;" id="cam2-overlay-text">CAMERA 2 OFFLINE</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="analysis-box glass-panel" style="margin-top: 15px;">
+                            <h3>🔍 Live Analysis</h3>
+                            <div class="analysis-list">
+                                <div class="analysis-item"><span class="lbl">Behavior</span><span class="val" id="lblBehavior-camera2">—</span></div>
+                                <div class="analysis-item"><span class="lbl">Congestion</span><span class="val" id="lblCongestion-camera2">—</span></div>
+                                <div class="analysis-item"><span class="lbl">Threat Status</span><span class="val" id="lblThreat-camera2">—</span></div>
+                                <div class="analysis-item"><span class="lbl">Violence</span><span class="val" id="lblViolence-camera2">—</span></div>
+                                <div class="analysis-item"><span class="lbl">Weapon</span><span class="val" id="lblWeapon-camera2">—</span></div>
+                                <div class="analysis-item"><span class="lbl">Audio (dB)</span><span class="val" id="lblAudio-camera2">—</span></div>
+                                <div class="analysis-item action-item">
+                                    <span class="lbl">Action</span>
+                                    <span class="val highlight" id="lblAction-camera2">—</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="dashboard-body" style="grid-template-columns: 1fr; margin-top: 20px;">
+                    <div class="chart-box glass-panel">
+                        <h3>📊 Risk Trend</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="riskChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: ANALYTICS -->
+            <div id="view-analytics" class="view-section hidden">
+                <header class="top-header" style="display:flex; justify-content:space-between; align-items:center;">
+                    <h1 class="page-title">📈 Historical Analytics</h1>
+                    <div class="cam-filter-bar" style="display:flex; gap:10px;">
+                        <button class="btn btn-sm btn-secondary active" id="btnFilterAll" onclick="filterAnalytics('all')">🌐 All Cameras</button>
+                        <button class="btn btn-sm btn-secondary" id="btnFilterCam1" onclick="filterAnalytics('Camera 1')">📹 Camera 1</button>
+                        <button class="btn btn-sm btn-secondary" id="btnFilterCam2" onclick="filterAnalytics('Camera 2')">📹 Camera 2</button>
+                    </div>
+                </header>
+
+                <!-- Camera 1 Analytics Box -->
+                <div id="analytics-box-cam1" style="margin-bottom: 24px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+                        <h3 style="margin:0; font-weight:700; color:#00F0FF;">📹 Camera 1 Analytics</h3>
+                        <span id="badgeStatusCam1" class="kpi-sub" style="color:#00F0FF; font-weight:600;">Status: Check...</span>
+                    </div>
+                    <div class="kpi-grid">
+                        <div class="kpi-card glass-panel">
+                            <div class="kpi-header"><p class="kpi-label">Peak Crowd (Cam 1)</p></div>
+                            <h2 class="kpi-value" id="statMaxPeople-cam1">—</h2>
+                        </div>
+                        <div class="kpi-card glass-panel">
+                            <div class="kpi-header"><p class="kpi-label">Avg Crowd (Cam 1)</p></div>
+                            <h2 class="kpi-value" id="statAvgPeople-cam1">—</h2>
+                        </div>
+                        <div class="kpi-card glass-panel">
+                            <div class="kpi-header"><p class="kpi-label">Max Risk (Cam 1)</p></div>
+                            <h2 class="kpi-value" id="statMaxRisk-cam1">—</h2>
+                        </div>
+                        <div class="kpi-card glass-panel">
+                            <div class="kpi-header"><p class="kpi-label">Incidents (Cam 1)</p></div>
+                            <h2 class="kpi-value" id="statIncidents-cam1">—</h2>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Camera 2 Analytics Box -->
+                <div id="analytics-box-cam2" style="margin-bottom: 24px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+                        <h3 style="margin:0; font-weight:700; color:#9D4EDD;">📹 Camera 2 Analytics</h3>
+                        <span id="badgeStatusCam2" class="kpi-sub" style="color:#9D4EDD; font-weight:600;">Status: Check...</span>
+                    </div>
+                    <div class="kpi-grid">
+                        <div class="kpi-card glass-panel">
+                            <div class="kpi-header"><p class="kpi-label">Peak Crowd (Cam 2)</p></div>
+                            <h2 class="kpi-value" id="statMaxPeople-cam2">—</h2>
+                        </div>
+                        <div class="kpi-card glass-panel">
+                            <div class="kpi-header"><p class="kpi-label">Avg Crowd (Cam 2)</p></div>
+                            <h2 class="kpi-value" id="statAvgPeople-cam2">—</h2>
+                        </div>
+                        <div class="kpi-card glass-panel">
+                            <div class="kpi-header"><p class="kpi-label">Max Risk (Cam 2)</p></div>
+                            <h2 class="kpi-value" id="statMaxRisk-cam2">—</h2>
+                        </div>
+                        <div class="kpi-card glass-panel">
+                            <div class="kpi-header"><p class="kpi-label">Incidents (Cam 2)</p></div>
+                            <h2 class="kpi-value" id="statIncidents-cam2">—</h2>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Combined System Summary -->
+                <div id="analytics-box-comb" style="margin-bottom: 24px;">
+                    <h3 style="margin-bottom:12px; font-weight:700;">🌐 Combined System Summary</h3>
+                    <div class="kpi-grid">
+                        <div class="kpi-card glass-panel">
+                            <div class="kpi-header"><p class="kpi-label">Total Peak Crowd</p></div>
+                            <h2 class="kpi-value" id="statMaxPeople-comb">—</h2>
+                        </div>
+                        <div class="kpi-card glass-panel">
+                            <div class="kpi-header"><p class="kpi-label">Total Avg Crowd</p></div>
+                            <h2 class="kpi-value" id="statAvgPeople-comb">—</h2>
+                        </div>
+                        <div class="kpi-card glass-panel">
+                            <div class="kpi-header"><p class="kpi-label">System Max Risk</p></div>
+                            <h2 class="kpi-value" id="statMaxRisk-comb">—</h2>
+                        </div>
+                        <div class="kpi-card glass-panel">
+                            <div class="kpi-header"><p class="kpi-label">Total Incidents</p></div>
+                            <h2 class="kpi-value" id="statIncidents-comb">—</h2>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="dashboard-body" style="grid-template-columns: 1fr;">
+                    <div class="glass-panel" style="padding: 24px; border-radius: 16px;">
+                        <h3 style="margin-bottom:20px; font-weight:700;">Recent Incidents Log (Divided by Camera)</h3>
+                        <table class="modern-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Camera Source</th>
+                                    <th>Risk Level</th>
+                                    <th>Score</th>
+                                    <th>People</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="incidentTableBody">
+                                <!-- Populated via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: EVIDENCE -->
+            <div id="view-evidence" class="view-section hidden">
+                <header class="top-header">
+                    <h1 class="page-title">🔍 Evidence Gallery</h1>
+                </header>
+                <div class="glass-panel evidence-container">
+                    <p class="kpi-sub" style="margin-bottom: 20px;">Screenshots automatically captured during WARNING, HIGH RISK, or CRITICAL events.</p>
+                    
+                    <div style="display: flex; gap: 20px;">
+                        <div style="flex: 1;">
+                            <h3 style="text-align: center; margin-bottom: 15px; color: var(--accent); font-family: 'Courier New', Courier, monospace;">> CAMERA_01</h3>
+                            <div class="evidence-grid" id="evidenceGridCam1">
+                                <!-- Populated via JS -->
+                            </div>
+                        </div>
+                        <div style="flex: 1;">
+                            <h3 style="text-align: center; margin-bottom: 15px; color: var(--accent); font-family: 'Courier New', Courier, monospace;">> CAMERA_02</h3>
+                            <div class="evidence-grid" id="evidenceGridCam2">
+                                <!-- Populated via JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: REPORTS -->
+            <div id="view-reports" class="view-section hidden">
+                <header class="top-header">
+                    <h1 class="page-title">📋 Reports Generator</h1>
+                </header>
+
+                <!-- Section 1: Camera 1 Dedicated Reports -->
+                <div style="margin-bottom: 24px;">
+                    <h3 style="margin-bottom:12px; font-weight:700; color:#00F0FF;">📹 Camera 1 Reports Generator</h3>
+                    <div class="dashboard-body" style="grid-template-columns: 1fr 1fr;">
+                        <div class="glass-panel report-card">
+                            <div class="kpi-header"><span class="kpi-icon">📊</span><p class="kpi-label">Camera 1 CSV Export</p></div>
+                            <p style="margin:16px 0; color:var(--text-secondary);">Download raw telemetry dataset specific to Camera 1 (crowd count, density, speed, and risk index).</p>
+                            <button class="btn btn-primary" onclick="downloadReport('csv', 'Camera 1')">Download Camera 1 CSV</button>
+                        </div>
+                        <div class="glass-panel report-card">
+                            <div class="kpi-header"><span class="kpi-icon">📄</span><p class="kpi-label">Camera 1 PDF Summary</p></div>
+                            <p style="margin:16px 0; color:var(--text-secondary);">Generate formatted PDF executive document containing Camera 1 statistics and incident logs.</p>
+                            <button class="btn btn-secondary" onclick="downloadReport('pdf', 'Camera 1')">Generate Camera 1 PDF</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Camera 2 Dedicated Reports -->
+                <div style="margin-bottom: 24px;">
+                    <h3 style="margin-bottom:12px; font-weight:700; color:#9D4EDD;">📹 Camera 2 Reports Generator</h3>
+                    <div class="dashboard-body" style="grid-template-columns: 1fr 1fr;">
+                        <div class="glass-panel report-card">
+                            <div class="kpi-header"><span class="kpi-icon">📊</span><p class="kpi-label">Camera 2 CSV Export</p></div>
+                            <p style="margin:16px 0; color:var(--text-secondary);">Download raw telemetry dataset specific to Camera 2 (crowd count, density, speed, and risk index).</p>
+                            <button class="btn btn-primary" onclick="downloadReport('csv', 'Camera 2')">Download Camera 2 CSV</button>
+                        </div>
+                        <div class="glass-panel report-card">
+                            <div class="kpi-header"><span class="kpi-icon">📄</span><p class="kpi-label">Camera 2 PDF Summary</p></div>
+                            <p style="margin:16px 0; color:var(--text-secondary);">Generate formatted PDF executive document containing Camera 2 statistics and incident logs.</p>
+                            <button class="btn btn-secondary" onclick="downloadReport('pdf', 'Camera 2')">Generate Camera 2 PDF</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Combined Multi-Camera System Reports -->
+                <div style="margin-bottom: 24px;">
+                    <h3 style="margin-bottom:12px; font-weight:700;">🌐 Combined System Reports (Both Cameras)</h3>
+                    <div class="dashboard-body" style="grid-template-columns: 1fr 1fr;">
+                        <div class="glass-panel report-card">
+                            <div class="kpi-header"><span class="kpi-icon">📊</span><p class="kpi-label">All Cameras Combined CSV</p></div>
+                            <p style="margin:16px 0; color:var(--text-secondary);">Download full raw multi-camera dataset tagged with camera source labels.</p>
+                            <button class="btn btn-primary" onclick="downloadReport('csv', null)">Download Full CSV Dataset</button>
+                        </div>
+                        <div class="glass-panel report-card">
+                            <div class="kpi-header"><span class="kpi-icon">📄</span><p class="kpi-label">Multi-Camera PDF Summary</p></div>
+                            <p style="margin:16px 0; color:var(--text-secondary);">Generate executive PDF document featuring Camera 1 vs Camera 2 side-by-side analytics comparison.</p>
+                            <button class="btn btn-secondary" onclick="downloadReport('pdf', null)">Generate Multi-Camera PDF</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: CHATBOT -->
+            <div id="view-chatbot" class="view-section hidden">
+                <header class="top-header">
+                    <h1 class="page-title">🤖 AI Assistant</h1>
+                </header>
+                <div class="glass-panel chat-container">
+                    <div class="chat-history" id="chatHistory">
+                        <div class="chat-msg bot-msg">
+                            <div class="msg-bubble">Hello! I am the Vision Guard AI Assistant. Ask me about the current crowd status, risk levels, or system operations!</div>
+                        </div>
+                    </div>
+                    <div class="chat-input-area">
+                        <input type="text" id="chatInput" placeholder="Ask a question..." onkeypress="handleChatKeyPress(event)">
+                        <button class="btn btn-primary" style="flex:0 0 auto; width:100px;" onclick="sendChatMessage()">Send</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: ADMIN CONTROL CENTER -->
+            <div id="view-settings" class="view-section hidden admin-view">
+                <header class="top-header" style="margin-bottom: 20px;">
+                    <h1 class="page-title admin-title">SYSTEM ROOT [ADMIN_MODE]</h1>
+                </header>
+                
+                <div class="dashboard-body" style="grid-template-columns: 1fr 1fr; gap: 24px;">
+                    
+                    <!-- AI Tuning Panel -->
+                    <div class="admin-panel">
+                        <h3 class="admin-title" style="font-size: 1.1rem;">> AI_PARAMETER_TUNING</h3>
+                        
+                        <div class="admin-slider-group">
+                            <div class="admin-slider-label">
+                                <span>Detection Confidence (YOLO)</span>
+                                <span id="valYoloConf">40%</span>
+                            </div>
+                            <input type="range" class="admin-slider" id="yoloConfSlider" min="10" max="90" value="40" oninput="updateAdminParam('yolo_conf', this.value)">
+                        </div>
+
+                        <div class="admin-slider-group">
+                            <div class="admin-slider-label">
+                                <span>Tripwire Offset (Y-Axis)</span>
+                                <span id="valTripwire">50%</span>
+                            </div>
+                            <input type="range" class="admin-slider" id="tripwireSlider" min="10" max="90" value="50" oninput="updateAdminParam('tripwire_y', this.value)">
+                        </div>
+                        
+                        <div class="admin-slider-group">
+                            <div class="admin-slider-label">
+                                <span>Density Base Threshold</span>
+                                <span id="valDensity">20%</span>
+                            </div>
+                            <input type="range" class="admin-slider" id="densitySlider" min="5" max="50" value="20" oninput="updateAdminParam('density_low', this.value)">
+                        </div>
+                    </div>
+
+                    <!-- Diagnostics Panel -->
+                    <div class="admin-panel">
+                        <h3 class="admin-title" style="font-size: 1.1rem;">> SYSTEM_DIAGNOSTICS</h3>
+                        <div class="admin-stat"><span>SERVER_STATUS:</span> <span class="val" style="color: #00FF41;">ONLINE</span></div>
+                        <div class="admin-stat"><span>CPU_USAGE:</span> <span class="val" id="diagCpu">14.2%</span></div>
+                        <div class="admin-stat"><span>MEM_USAGE:</span> <span class="val" id="diagMem">458 MB</span></div>
+                        <div class="admin-stat"><span>DB_SIZE:</span> <span class="val" id="diagDb">1.2 GB</span></div>
+                        <div class="admin-stat"><span>UPTIME:</span> <span class="val" id="diagUptime">04:12:33</span></div>
+                    </div>
+
+                    <!-- Danger Zone -->
+                    <div class="admin-panel danger-zone" style="grid-column: 1 / -1;">
+                        <h3 class="admin-title danger-title" style="font-size: 1.1rem;">> SEVERE_WARNING: DANGER_ZONE</h3>
+                        <p style="margin-bottom: 20px; font-size: 0.9rem;">
+                            EXECUTION OF THE FOLLOWING COMMAND WILL PURGE ALL HISTORICAL TELEMETRY, INCIDENT REPORTS, AND EVIDENCE FILES FROM THE STORAGE DRIVE. THIS ACTION IS IRREVERSIBLE.
+                        </p>
+                        <button class="btn btn-danger" onclick="clearDatabase()">[ EXECUTE_DATA_PURGE ]</button>
+                    </div>
+
+                </div>
+            </div>
+
+
+        </main>
+    </div>
+
+    <script src="script.js?v=4"></script>
+</body>
+</html>
