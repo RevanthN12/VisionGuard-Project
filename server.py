@@ -626,8 +626,11 @@ def start_monitoring():
     def start_cam(cid, p):
         cam_state = state[cid]
         cam_analyzers = analyzers[cid]
+        cam_state["running"] = False
+        time.sleep(0.05)
         if cam_state["vp"]:
             cam_state["vp"].release()
+            cam_state["vp"] = None
         vp = video_processor.VideoProcessor()
         ok = False
 
@@ -734,11 +737,13 @@ def stop_monitoring():
     
     def stop_cam(cid):
         state[cid]["running"] = False
+        time.sleep(0.05)
         if analyzers[cid]["recorder"]._recording:
             analyzers[cid]["recorder"].stop_clip()
         if state[cid]["vp"]:
             state[cid]["vp"].release()
             state[cid]["vp"] = None
+        state[cid]["current_frame"] = None
 
     if camera_id == "both":
         stop_cam("camera1")

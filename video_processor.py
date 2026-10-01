@@ -197,6 +197,9 @@ class VideoProcessor:
                 self.is_open = False
                 return False
 
+            if source_type in (self.SOURCE_FILE, self.SOURCE_SAMPLE):
+                self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
             self.cap.set(cv2.CAP_PROP_FRAME_WIDTH,  self.width)
             self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
 
