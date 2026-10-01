@@ -1,0 +1,31 @@
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Data and videos (do not copy existing evidence into the image)
+outputs/
+database/*.db
+crowdwatch.db
+
+# Logs
+*.log
+*.sqlite
+*.db
+
+# Git
+.git/
+.gitignore
+
+# Kubernetes
+k8s/
+
+# macOS
+.DS_Store

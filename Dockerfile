@@ -1,26 +1,29 @@
-# Use an official Python runtime as a parent image
-FROM python:3.10-slim
+FROM python:3.11-slim
 
-# Set the working directory in the container
-WORKDIR /app
-
-# Install system dependencies for OpenCV
+# Install system dependencies required by OpenCV and other libraries
 RUN apt-get update && apt-get install -y \
-    libgl1 \
+    libgl1-mesa-glx \
     libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the requirements file into the container
+# Set working directory
+WORKDIR /app
+
+# Copy requirements file
 COPY requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application code
+# Copy the rest of the application source code
 COPY . .
 
-# Expose port 5000 for the Flask server
+# Expose port (can be overridden by Kubernetes config)
 EXPOSE 5000
 
-# Run the Flask server when the container launches
+# Start the Flask application
 CMD ["python", "server.py"]

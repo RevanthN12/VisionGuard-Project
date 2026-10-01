@@ -81,3 +81,6 @@ Werkzeug
 wikipedia
 
 cloudinary
+
+supabase
+python-dotenv

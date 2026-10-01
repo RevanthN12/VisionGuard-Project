@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: visionguard
+  namespace: visionguard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: visionguard
+  template:
+    metadata:
+      labels:
+        app: visionguard
+    spec:
+      containers:
+      - name: visionguard
+        image: visionguard:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 5000
+        envFrom:
+        - configMapRef:
+            name: visionguard-config
+        - secretRef:
+            name: visionguard-secrets
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: data-volume
+          mountPath: /app/database
+          subPath: database
+        - name: data-volume
+          mountPath: /app/outputs
+          subPath: outputs
+      volumes:
+      - name: data-volume
+        persistentVolumeClaim:
+          claimName: visionguard-pvc

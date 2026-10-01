@@ -878,6 +878,11 @@ def clear_db():
     
     return jsonify({"success": success})
 
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Lightweight endpoint for Kubernetes readiness and liveness probes."""
+    return jsonify({"status": "healthy"})
+
 def _daily_report_job():
     """Background loop to generate and email PDF report at midnight."""
     import time, datetime, report_generator, notifier
@@ -908,8 +913,8 @@ if __name__ == '__main__':
     threading.Thread(target=_daily_report_job, daemon=True).start()
 
     app.run(
-        host="127.0.0.1",
-        port=5000,
+        host=os.getenv("FLASK_HOST", "0.0.0.0"),
+        port=int(os.getenv("FLASK_PORT", 5000)),
         debug=False,
         use_reloader=False,
         threaded=True

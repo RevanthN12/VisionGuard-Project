@@ -28,36 +28,10 @@ class EvidenceRecorder:
     def maybe_save(self, frame, risk_result: dict, density_result: dict,
                    movement_result: dict, person_count: int, camera_label: str = "Camera 1") -> str | None:
         """
-        Save a screenshot if risk level is HIGH RISK or CRITICAL.
-        Returns the relative path of the saved image, or None.
+        Disabled image snapshot saving per user request. Only video clips will be saved.
+        Returns None to force system to rely on video clip path.
         """
-        level = risk_result.get("level", "SAFE")
-        if level not in ("HIGH RISK", "CRITICAL"):
-            return None
-
-        now = time.time()
-        if (now - self._last_img_time) < 5:
-            return None
-        self._last_img_time = now
-
-        annotated = self._annotate(frame.copy(), risk_result, density_result, movement_result, person_count, camera_label)
-        ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        cam_prefix = camera_label.replace(' ', '_')
-        filename = f"{cam_prefix}_{level.replace(' ','_')}_{ts}.jpg"
-        filepath = os.path.join(config.EVIDENCE_IMG_DIR, filename)
-
-        try:
-            cv2.imwrite(filepath, annotated)
-            print(f"[Evidence] [SNAPSHOT_SAVED] High Risk Snapshot Saved: {filepath}")
-            
-            # --- Cloud Storage Trigger ---
-            import cloud_storage
-            cloud_storage.upload_evidence(filepath, resource_type="image")
-            
-            return filepath
-        except Exception as e:
-            print(f"[Evidence] Save error: {e}")
-            return None
+        return None
 
     def start_clip(self, frame, level: str, camera_label: str = "Camera 1", fps: float = 25.0):
         """Begin recording a FULL DURATION evidence video clip at 1.0x normal speed."""

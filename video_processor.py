@@ -135,8 +135,10 @@ class VideoProcessor:
         self.release()
         try:
             if isinstance(source, int) or (isinstance(source, str) and str(source).isdigit()):
-                # Use default backend (MSMF on Windows) instead of DSHOW which causes C++ exceptions on restart
-                self.cap = cv2.VideoCapture(int(source))
+                # Prioritize DSHOW on Windows for better compatibility, fallback to default MSMF
+                self.cap = cv2.VideoCapture(int(source), cv2.CAP_DSHOW)
+                if not self.cap.isOpened():
+                    self.cap = cv2.VideoCapture(int(source))
             else:
                 self.cap = cv2.VideoCapture(source)
 

@@ -115,3 +115,72 @@ If you want to change the look and feel of the web dashboard:
 
 ### 4. Custom AI Models (`models/`)
 Right now, the system uses `yolov8n.pt` for detecting people. If you train a better, custom YOLO model on a specific dataset (for example, for a top-down camera view), you can just drop your `.pt` model file into the `models/` folder and update the path in `config.py`.
+
+---
+
+## 🚀 DevOps Implementation
+
+### Git
+Used for local version control and tracking source-code changes.
+
+### GitHub
+Used for remote repository hosting, collaboration, and maintaining the project source code.
+
+### Docker
+Packages VisionGuard and its Python dependencies into a portable container.
+
+**Docker Build & Run:**
+```bash
+docker build -t visionguard:latest .
+docker run -p 5000:5000 visionguard:latest
+```
+
+### Kubernetes
+Deploys and manages the VisionGuard container, provides service exposure, health checking, restart management, and persistent storage. NO SUPABASE. NO CLOUD STORAGE.
+
+**Kubernetes Deployment (Minikube / Docker Desktop):**
+```bash
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/secret.example.yaml
+kubectl apply -f k8s/persistent-volume.yaml
+kubectl apply -f k8s/persistent-volume-claim.yaml
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+```
+
+**Helpful K8s Commands:**
+- `kubectl get pods -n visionguard`
+- `kubectl logs deployment/visionguard -n visionguard`
+- `kubectl get services -n visionguard`
+
+---
+
+## 🏗 Architecture
+
+```
+Developer
+    ↓
+   Git
+    ↓
+  GitHub
+    ↓
+  Docker
+    ↓
+Kubernetes
+    ↓
+VisionGuard Flask Application
+    ↓
+┌───────────────┬────────────────┐
+↓               ↓                ↓
+YOLOv8       Risk Engine       SQLite
+↓               ↓                ↓
+Crowd        Risk Level       Database
+Analysis         ↓
+↓           Evidence
+↓               ↓
+Dashboard    Persistent Volume
+↓
+Telegram Alerts
+```
+*(Future CI/CD enhancement: GitHub Actions -> Container Registry -> Kubernetes Deployment)*
