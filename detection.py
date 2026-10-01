@@ -191,7 +191,7 @@ def detect_persons(frame, conf: float = None, draw: bool = True, detect_weapons:
             results_w = _weapon_model.predict(
                 source=frame,
                 imgsz=config.YOLO_IMGSZ,
-                conf=0.25,
+                conf=0.10,
                 verbose=False
             )
             

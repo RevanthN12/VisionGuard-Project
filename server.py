@@ -239,7 +239,8 @@ def video_processing_loop(camera_id):
             cam_state["last_loop_t"] = loop_now
 
             # ── 1. Object Detection (People + Weapons) ───────────
-            run_weapons = cam_state["simulations"]["weapon"]
+            # Always run real weapon detection
+            run_weapons = True
             det = detection.detect_persons(frame, draw=True, detect_weapons=run_weapons)
             ann = det["annotated_frame"]
             
@@ -772,9 +773,9 @@ def video_feed(camera_id):
         _, ph_buf = cv2.imencode('.jpg', placeholder)
         ph_bytes = ph_buf.tobytes()
 
-        while state[cid].get("running", False):
+        while True:
             frame_data = state[cid].get("current_frame")
-            if frame_data:
+            if state[cid].get("running", False) and frame_data:
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n'
                        b'Content-Length: ' + str(len(frame_data)).encode() + b'\r\n'
@@ -909,7 +910,7 @@ if __name__ == '__main__':
     app.run(
         host="127.0.0.1",
         port=5000,
-        debug=True,
+        debug=False,
         use_reloader=False,
         threaded=True
     )
