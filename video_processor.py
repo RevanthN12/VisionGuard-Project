@@ -167,8 +167,11 @@ class VideoProcessor:
         try:
             if isinstance(source, int) or (isinstance(source, str) and str(source).isdigit()):
                 # Prioritize DSHOW on Windows for better compatibility, fallback to default MSMF
-                self.cap = cv2.VideoCapture(int(source), cv2.CAP_DSHOW)
-                if not self.cap.isOpened():
+                if os.name == 'nt' and hasattr(cv2, 'CAP_DSHOW'):
+                    self.cap = cv2.VideoCapture(int(source), cv2.CAP_DSHOW)
+                else:
+                    self.cap = cv2.VideoCapture(int(source))
+                if self.cap is None or not self.cap.isOpened():
                     self.cap = cv2.VideoCapture(int(source))
             else:
                 self.cap = cv2.VideoCapture(source)
