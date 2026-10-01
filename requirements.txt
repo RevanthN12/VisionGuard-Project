@@ -30,7 +30,7 @@ joblib
 jsonschema
 jsonschema-specifications
 kiwisolver
-lap
+lapx
 MarkupSafe
 matplotlib
 mpmath
