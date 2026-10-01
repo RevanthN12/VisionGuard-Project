@@ -1,15 +1,9 @@
-FROM python:3.10-slim
+FROM python:3.10
 
-# Install system dependencies required by OpenCV and other libraries
+# Install system dependencies required by OpenCV
 RUN apt-get update && apt-get install -y \
-    build-essential \
-    gcc \
-    g++ \
     libgl1-mesa-glx \
     libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
@@ -19,8 +13,9 @@ WORKDIR /app
 # Copy requirements file
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Upgrade pip and install Python dependencies
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application source code
 COPY . .
