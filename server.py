@@ -772,7 +772,7 @@ def video_feed(camera_id):
         _, ph_buf = cv2.imencode('.jpg', placeholder)
         ph_bytes = ph_buf.tobytes()
 
-        while True:
+        while state[cid].get("running", False):
             frame_data = state[cid].get("current_frame")
             if frame_data:
                 yield (b'--frame\r\n'
@@ -786,6 +786,13 @@ def video_feed(camera_id):
                        b'Content-Length: ' + str(len(ph_bytes)).encode() + b'\r\n'
                        b'\r\n' + ph_bytes + b'\r\n')
                 time.sleep(0.2)
+                
+        # Yield one last black/offline frame and close connection
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n'
+               b'Content-Length: ' + str(len(ph_bytes)).encode() + b'\r\n'
+               b'\r\n' + ph_bytes + b'\r\n'
+               b'--frame--\r\n')
 
     return Response(generate(camera_id), mimetype='multipart/x-mixed-replace; boundary=frame')
 
@@ -870,10 +877,34 @@ def clear_db():
     
     return jsonify({"success": success})
 
+def _daily_report_job():
+    """Background loop to generate and email PDF report at midnight."""
+    import time, datetime, report_generator, notifier
+    last_run_day = None
+    while True:
+        now = datetime.datetime.now()
+        # Run at midnight (00:xx) once per day
+        if now.hour == 0 and now.minute == 0 and last_run_day != now.day:
+            print("[Scheduler] Generating Daily Midnight PDF Report...")
+            try:
+                pdf_path = report_generator.generate_pdf(video_source="Camera 1")
+                notifier.send_email_alert(
+                    "Daily Security Summary - VisionGuard",
+                    "Attached is the daily security summary PDF report.",
+                    [pdf_path] if pdf_path else None
+                )
+                last_run_day = now.day
+                print("[Scheduler] [SUCCESS] Daily report sent.")
+            except Exception as e:
+                print(f"[Scheduler] [ERROR] Failed to send daily report: {e}")
+        time.sleep(30)
+
 if __name__ == '__main__':
     os.makedirs('frontend', exist_ok=True)
 
     print("Starting Flask server...")
+    import threading
+    threading.Thread(target=_daily_report_job, daemon=True).start()
 
     app.run(
         host="127.0.0.1",

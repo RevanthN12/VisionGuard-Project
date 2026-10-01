@@ -135,15 +135,31 @@ class VideoProcessor:
         self.release()
         try:
             if isinstance(source, int) or (isinstance(source, str) and str(source).isdigit()):
-                # Prioritize DSHOW on Windows for better compatibility
-                self.cap = cv2.VideoCapture(int(source), cv2.CAP_DSHOW)
-                if not self.cap.isOpened():
-                    self.cap = cv2.VideoCapture(int(source))
+                # Use default backend (MSMF on Windows) instead of DSHOW which causes C++ exceptions on restart
+                self.cap = cv2.VideoCapture(int(source))
             else:
                 self.cap = cv2.VideoCapture(source)
 
             if not self.cap.isOpened():
                 print(f"[VideoProcessor] Cannot open source: {source}")
+                self.cap = None
+                self.is_open = False
+                return False
+                
+            # Perform a test read to ensure the camera isn't returning blank frames (common on Windows restarts)
+            # Give the camera sensor time to wake up (try up to 30 times = 3 seconds)
+            test_ok = False
+            for _ in range(30):
+                ret, test_frame = self.cap.read()
+                if ret and test_frame is not None:
+                    test_ok = True
+                    break
+                import time
+                time.sleep(0.1)
+                
+            if not test_ok:
+                print(f"[VideoProcessor] Source opened but returned blank frame after retries: {source}")
+                self.cap.release()
                 self.cap = None
                 self.is_open = False
                 return False

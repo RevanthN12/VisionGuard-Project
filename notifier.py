@@ -11,9 +11,6 @@ from email.message import EmailMessage
 import urllib.parse
 from email.message import EmailMessage
 from dotenv import load_dotenv
-# pywhatkit will be imported lazily to prevent crashes if internet is down on startup
-import pyautogui
-import time
 
 # Load environment variables from .env file
 load_dotenv()

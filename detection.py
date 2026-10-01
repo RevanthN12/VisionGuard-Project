@@ -19,10 +19,11 @@ import config
 
 _model = None
 _weapon_model = None
+_face_cascade = None
 
 def load_model():
-    """Load YOLOv8n and Weapon models. Called once at startup."""
-    global _model, _weapon_model
+    """Load YOLOv8n, Weapon models, and Face Cascade. Called once at startup."""
+    global _model, _weapon_model, _face_cascade
     if _model is not None:
         return True
     try:
@@ -42,6 +43,9 @@ def load_model():
         _model.predict(dummy, imgsz=config.YOLO_IMGSZ, classes=[0], verbose=False)
         if _weapon_model is not None:
             _weapon_model.predict(dummy, imgsz=config.YOLO_IMGSZ, verbose=False)
+            
+        _face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        
         print("[Detection] Engine warmup complete. Ready for real-time inference.")
         return True
     except Exception as e:
@@ -148,30 +152,36 @@ def detect_persons(frame, conf: float = None, draw: bool = True, detect_weapons:
                         cv2.putText(annotated, label, (x1 + 4, y1 - 4),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.48, color, 1)
 
-                        # Dedicated Face & Head Targeting Box (top 35% of person figure)
-                        head_w = max(16, int((x2 - x1) * 0.50))
-                        head_h = max(16, int((y2 - y1) * 0.35))
-                        fx1 = max(0, cx - head_w // 2)
-                        fx2 = min(annotated.shape[1], cx + head_w // 2)
-                        fy1 = y1
-                        fy2 = min(annotated.shape[0], y1 + head_h)
-                        face_color = (0, 240, 255) # Cyan for face
-                        cv2.rectangle(annotated, (fx1, fy1), (fx2, fy2), face_color, 1)
-                        # Face corner brackets
-                        fc_len = max(5, head_w // 4)
-                        cv2.line(annotated, (fx1, fy1), (fx1 + fc_len, fy1), face_color, 2)
-                        cv2.line(annotated, (fx1, fy1), (fx1, fy1 + fc_len), face_color, 2)
-                        cv2.line(annotated, (fx2, fy1), (fx2 - fc_len, fy1), face_color, 2)
-                        cv2.line(annotated, (fx2, fy1), (fx2, fy1 + fc_len), face_color, 2)
-                        cv2.line(annotated, (fx1, fy2), (fx1 + fc_len, fy2), face_color, 2)
-                        cv2.line(annotated, (fx1, fy2), (fx1, fy2 - fc_len), face_color, 2)
-                        cv2.line(annotated, (fx2, fy2), (fx2 - fc_len, fy2), face_color, 2)
-                        cv2.line(annotated, (fx2, fy2), (fx2, fy2 - fc_len), face_color, 2)
-                        
-                        # Face center crosshair
-                        fcx, fcy = (fx1 + fx2) // 2, (fy1 + fy2) // 2
-                        cv2.drawMarker(annotated, (fcx, fcy), face_color, cv2.MARKER_CROSS, 8, 1)
-                        cv2.putText(annotated, "FACE TARGET", (fx1, fy2 + 14), cv2.FONT_HERSHEY_SIMPLEX, 0.36, face_color, 1)
+                        # --- ACTUAL FACE DETECTION ---
+                        # Crop the person's bounding box region
+                        roi_gray = cv2.cvtColor(frame[y1:y2, x1:x2], cv2.COLOR_BGR2GRAY)
+                        if _face_cascade is not None and roi_gray.size > 0:
+                            # Optimize face search: faces are usually in the top half of the body
+                            h_roi, w_roi = roi_gray.shape
+                            head_search_roi = roi_gray[0:int(h_roi * 0.6), :]
+                            
+                            faces = _face_cascade.detectMultiScale(
+                                head_search_roi, 
+                                scaleFactor=1.1, 
+                                minNeighbors=4, 
+                                minSize=(20, 20)
+                            )
+                            
+                            if len(faces) > 0:
+                                # Assume the largest detected face is the main one
+                                (fx, fy, fw, fh) = max(faces, key=lambda b: b[2] * b[3])
+                                
+                                # Convert back to absolute frame coordinates
+                                abs_fx = x1 + fx
+                                abs_fy = y1 + fy
+                                
+                                face_color = (0, 240, 255) # Cyan for face
+                                cv2.rectangle(annotated, (abs_fx, abs_fy), (abs_fx + fw, abs_fy + fh), face_color, 2)
+                                
+                                # Draw FACE label
+                                face_label = "FACE"
+                                cv2.rectangle(annotated, (abs_fx, abs_fy - 14), (abs_fx + fw, abs_fy), (15, 25, 15), -1)
+                                cv2.putText(annotated, face_label, (abs_fx + 2, abs_fy - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.36, face_color, 1)
                     else:  # Bags / Objects
                         cv2.rectangle(annotated, (x1, y1), (x2, y2), (255, 150, 0), 2)
                         cv2.putText(annotated, f"{cls_name.upper()} {score*100:.0f}%", (x1, y1 - 4), cv2.FONT_HERSHEY_SIMPLEX, 0.40, (255, 150, 0), 1)

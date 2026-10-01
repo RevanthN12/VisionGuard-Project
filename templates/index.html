@@ -205,7 +205,11 @@
         <div class="card chart-card">
             <div class="card-hdr">
                 <h2><i class="fa-solid fa-chart-area"></i> Historical Crowd & Risk Trends</h2>
-                <button class="icon-btn" id="btn-refresh-chart"><i class="fa-solid fa-rotate"></i></button>
+                <div style="display:flex; gap:0.5rem; align-items:center;">
+                    <button class="btn btn-primary" onclick="downloadReport('pdf')" style="font-size:0.8rem; padding:4px 8px;"><i class="fa-solid fa-file-pdf"></i> PDF Report</button>
+                    <button class="btn btn-secondary" onclick="downloadReport('csv')" style="font-size:0.8rem; padding:4px 8px;"><i class="fa-solid fa-file-csv"></i> CSV Logs</button>
+                    <button class="icon-btn" id="btn-refresh-chart" title="Refresh Chart"><i class="fa-solid fa-rotate"></i></button>
+                </div>
             </div>
             <div class="chart-wrap"><canvas id="trend-chart"></canvas></div>
         </div>

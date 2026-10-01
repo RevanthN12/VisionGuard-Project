@@ -73,7 +73,7 @@ class WeaponDetector:
         weapons = []
         try:
             results = _weapon_model.predict(
-                frame, conf=0.45, verbose=False
+                frame, conf=0.25, verbose=False
             )
             if results and results[0].boxes is not None:
                 for box in results[0].boxes:

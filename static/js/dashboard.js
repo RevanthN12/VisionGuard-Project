@@ -381,3 +381,30 @@ loadEvidence();
 loadChart();
 
 console.log('CrowdWatch AI V2 Dashboard Initialised');
+
+async function downloadReport(type) {
+    const cam = currentCam;
+    const btn = event.currentTarget;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating...';
+    btn.disabled = true;
+    try {
+        const res = await fetch('/api/reports/generate_' + type, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ camera: cam })
+        });
+        const data = await res.json();
+        if (data.status === 'success') {
+            window.location.href = data.download_url;
+        } else {
+            alert('Failed to generate report: ' + data.message);
+        }
+    } catch (e) {
+        alert('Error: ' + e);
+    } finally {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+

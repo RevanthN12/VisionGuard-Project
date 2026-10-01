@@ -90,3 +90,7 @@ for _d in [EVIDENCE_IMG_DIR, EVIDENCE_VID_DIR, REPORTS_DIR,
 # -- External Alerts ----------------------------------------------------------
 EXTERNAL_ALERTS_ENABLED = True
 EXTERNAL_ALERT_LEVELS = {'HIGH RISK', 'CRITICAL'}
+
+# --- CLOUD STORAGE CONFIG ---
+CLOUD_STORAGE_ENABLED = True
+CLOUDINARY_URL = os.getenv('CLOUDINARY_URL', '')

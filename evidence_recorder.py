@@ -49,6 +49,11 @@ class EvidenceRecorder:
         try:
             cv2.imwrite(filepath, annotated)
             print(f"[Evidence] [SNAPSHOT_SAVED] High Risk Snapshot Saved: {filepath}")
+            
+            # --- Cloud Storage Trigger ---
+            import cloud_storage
+            cloud_storage.upload_evidence(filepath, resource_type="image")
+            
             return filepath
         except Exception as e:
             print(f"[Evidence] Save error: {e}")
@@ -136,6 +141,11 @@ class EvidenceRecorder:
                     if result.returncode == 0 and os.path.exists(temp_path) and os.path.getsize(temp_path) > 1000:
                         os.replace(temp_path, filepath)
                         print(f"[Evidence] [ENCODED] Normal 1.0x speed video ready: {filepath}")
+                        
+                        # --- Cloud Storage Trigger ---
+                        import cloud_storage
+                        cloud_storage.upload_evidence(filepath, resource_type="video")
+                        
                 except Exception as e:
                     print(f"[Evidence] FFmpeg conversion error: {e}")
             threading.Thread(target=convert, args=(self._current_clip, actual_fps), daemon=True).start()
