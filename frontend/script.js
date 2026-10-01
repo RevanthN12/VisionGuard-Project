@@ -20,13 +20,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         initChart();
         fetchSamples();
         
-        // Do not auto-connect video feeds; wait for user to click Start.
-        ['cam1-overlay', 'cam2-overlay'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) { 
-                el.innerHTML = `<div style="text-align: center; color: #ff6b6b;"><div style="font-size: 1.5rem;">⚠️</div><div style="margin-top: 12px;">Camera Offline</div></div>`;
-                el.style.opacity = '1'; 
-                el.classList.remove('hidden'); 
+        // Auto-connect video feeds to active surveillance stream
+        ['camera1', 'camera2'].forEach(cid => {
+            const v = document.getElementById(cid === 'camera1' ? 'cam1-video' : 'cam2-video');
+            const el = document.getElementById(cid === 'camera1' ? 'cam1-overlay' : 'cam2-overlay');
+            if (v) {
+                v.src = `${API_URL}/video_feed/${cid}?t=${new Date().getTime()}`;
+                if (el) {
+                    el.style.opacity = '0';
+                    el.classList.add('hidden');
+                }
             }
         });
 

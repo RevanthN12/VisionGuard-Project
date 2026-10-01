@@ -70,12 +70,43 @@ class VideoProcessor:
 
         return self._open(path, self.SOURCE_SAMPLE)
 
+    def open_synthetic(self) -> bool:
+        """Create a synthetic animated surveillance stream if physical webcam & sample files are unavailable."""
+        self.source_type = "synthetic"
+        self.source_path = "Synthetic Stream"
+        self.is_open = True
+        self.frame_count = 0
+        self.fps = config.TARGET_FPS
+        return True
+
     def read_frame(self):
         """
         Read the next frame.
         Returns (success: bool, frame: ndarray | None).
         Handles looping for file sources and 1.0x real-time speed throttling.
         """
+        if self.source_type == "synthetic":
+            now = time.time()
+            frame_interval = 1.0 / max(self.fps, 1.0)
+            if (now - self._last_frame_t) < frame_interval:
+                return False, None
+            self._last_frame_t = now
+            
+            import numpy as np, math
+            h, w = self.height, self.width
+            frame = np.zeros((h, w, 3), dtype=np.uint8)
+            for x in range(0, w, 40):
+                cv2.line(frame, (x, 0), (x, h), (20, 25, 35), 1)
+            for y in range(0, h, 40):
+                cv2.line(frame, (0, y), (w, y), (20, 25, 35), 1)
+            t = self.frame_count * 0.05
+            cx = int(w/2 + math.sin(t) * 150)
+            cy = int(h/2 + math.cos(t * 0.7) * 100)
+            cv2.rectangle(frame, (cx-30, cy-60), (cx+30, cy+60), (0, 255, 0), 2)
+            cv2.putText(frame, "PERSON 95%", (cx-30, cy-65), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 255, 0), 1)
+            self.frame_count += 1
+            return True, frame
+
         if self.cap is None or not self.cap.isOpened():
             self.is_open = False
             return False, None

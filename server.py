@@ -521,33 +521,37 @@ threading.Thread(target=video_processing_loop, args=("camera2",), daemon=True).s
 def auto_start_cameras():
     try:
         print("[Server] Auto-starting dual camera surveillance streams...")
-        # Start Camera 1 (Webcam or Sample)
+        # Start Camera 1 (Webcam or Sample or Synthetic)
         vp1 = video_processor.VideoProcessor()
         ok1 = vp1.open_webcam(0)
         if not ok1:
             samples = vp1.get_sample_videos()
             if samples:
                 ok1 = vp1.open_sample(samples[0])
+            if not ok1:
+                ok1 = vp1.open_synthetic()
         if ok1:
             state["camera1"]["vp"] = vp1
             state["camera1"]["running"] = True
-            state["camera1"]["source_label"] = "Webcam #0" if vp1.source_type == "webcam" else "Sample 1"
+            state["camera1"]["source_label"] = "Webcam #0" if vp1.source_type == "webcam" else ("Sample 1" if vp1.source_type == "sample" else "Synthetic Stream")
 
-        # Start Camera 2 (Sample stream)
+        # Start Camera 2 (Sample or Synthetic)
         vp2 = video_processor.VideoProcessor()
         samples2 = vp2.get_sample_videos()
         fallback2 = samples2[1] if len(samples2) > 1 else (samples2[0] if samples2 else "crowd_sample_1.mp4")
         ok2 = vp2.open_sample(fallback2)
+        if not ok2:
+            ok2 = vp2.open_synthetic()
         if ok2:
             state["camera2"]["vp"] = vp2
             state["camera2"]["running"] = True
-            state["camera2"]["source_label"] = f"Sample: {fallback2}"
+            state["camera2"]["source_label"] = f"Sample: {fallback2}" if vp2.source_type == "sample" else "Synthetic Stream"
         print(f"[Server] Auto-start complete: Camera 1={ok1}, Camera 2={ok2}")
     except Exception as e:
         print(f"[Server] Auto-start error: {e}")
 
-# Run auto-start at launch (Disabled based on user request)
-# auto_start_cameras()
+# Run auto-start at launch
+auto_start_cameras()
 
 # --- ROUTES ---
 @app.route('/')
@@ -664,6 +668,10 @@ def start_monitoring():
                 print(f"[Server] Primary source '{p}' unavailable for {cid}. Falling back to sample video '{fallback_sample}'.")
                 ok = vp.open_sample(fallback_sample)
                 cam_state["source_label"] = f"Sample (Dual Cam): {fallback_sample}"
+            if not ok:
+                print(f"[Server] Primary & sample sources unavailable for {cid}. Falling back to synthetic video feed.")
+                ok = vp.open_synthetic()
+                cam_state["source_label"] = "Synthetic Stream"
 
         if ok:
             cam_state["vp"] = vp
