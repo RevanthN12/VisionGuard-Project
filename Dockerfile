@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.10-slim
 
 # Install system dependencies required by OpenCV and other libraries
 RUN apt-get update && apt-get install -y \
