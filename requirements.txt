@@ -49,6 +49,7 @@ pyarrow
 pydeck
 pyparsing
 python-dateutil
+python-dotenv
 python-multipart
 PyYAML
 referencing

@@ -112,11 +112,11 @@ def _search_kb(query: str) -> str | None:
 
 
 import os
-import requests
-import json
-from dotenv import load_dotenv
-
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 
 def _generate_fallback_response(query: str, ctx: dict) -> str:

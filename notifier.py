@@ -9,11 +9,11 @@ import urllib.request
 import urllib.parse
 from email.message import EmailMessage
 import urllib.parse
-from email.message import EmailMessage
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 # ── Gmail Configuration ────────────────────────────────────────────────────────
 GMAIL_SENDER    = os.getenv("GMAIL_SENDER_EMAIL",    "").strip()
