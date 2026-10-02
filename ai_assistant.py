@@ -112,6 +112,9 @@ def _search_kb(query: str) -> str | None:
 
 
 import os
+import json
+import requests
+
 try:
     from dotenv import load_dotenv
     load_dotenv()
