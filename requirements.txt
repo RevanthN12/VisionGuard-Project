@@ -81,4 +81,7 @@ Werkzeug
 wikipedia
 
 cloudinary
+prometheus-client
+pytest
+safety
 

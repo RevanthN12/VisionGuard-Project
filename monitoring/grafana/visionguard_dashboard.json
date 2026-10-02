@@ -1,0 +1,50 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "VisionGuard System Status",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "up{job=\"visionguard\"}",
+          "legendFormat": "App Up Status"
+        }
+      ]
+    },
+    {
+      "title": "Real-time Crowd Count (YOLOv8)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "visionguard_people_detected_total",
+          "legendFormat": "{{camera}}"
+        }
+      ]
+    },
+    {
+      "title": "Stampede Risk Score (%)",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "visionguard_risk_score",
+          "legendFormat": "{{camera}} Risk %"
+        }
+      ]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["visionguard", "devops", "crowd-safety"],
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "title": "VisionGuard - Crowd Safety & DevOps Monitoring Dashboard"
+}

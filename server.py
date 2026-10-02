@@ -32,6 +32,15 @@ import noise_monitor
 import alert
 import face_recognition_system
 
+try:
+    from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
+    PROMETHEUS_AVAILABLE = True
+    PROMETHEUS_REQUESTS = Counter('visionguard_requests_total', 'Total HTTP Requests', ['method', 'endpoint'])
+    PROMETHEUS_PERSON_COUNT = Gauge('visionguard_people_detected_total', 'Real-time person count detected by YOLO', ['camera'])
+    PROMETHEUS_RISK_SCORE = Gauge('visionguard_risk_score', 'Real-time stampede risk score percentage', ['camera'])
+except ImportError:
+    PROMETHEUS_AVAILABLE = False
+
 app = Flask(__name__, static_folder='frontend', static_url_path='/')
 app.secret_key = 'super_secret_key_for_vision_guard'
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
@@ -895,6 +904,20 @@ def clear_db():
 def health_check():
     """Lightweight endpoint for Kubernetes readiness and liveness probes."""
     return jsonify({"status": "healthy"})
+
+@app.route('/metrics', methods=['GET'])
+def metrics():
+    """Prometheus metrics endpoint for monitoring availability, requests, and risk stats."""
+    if PROMETHEUS_AVAILABLE:
+        try:
+            PROMETHEUS_PERSON_COUNT.labels(camera='camera1').set(state['camera1']['stats'].get('person_count', 0))
+            PROMETHEUS_PERSON_COUNT.labels(camera='camera2').set(state['camera2']['stats'].get('person_count', 0))
+            PROMETHEUS_RISK_SCORE.labels(camera='camera1').set(state['camera1']['stats'].get('risk_score', 0))
+            PROMETHEUS_RISK_SCORE.labels(camera='camera2').set(state['camera2']['stats'].get('risk_score', 0))
+            return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+    return jsonify({"status": "healthy", "prometheus_enabled": False})
 
 def _daily_report_job():
     """Background loop to generate and email PDF report at midnight."""
