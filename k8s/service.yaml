@@ -4,11 +4,10 @@ metadata:
   name: visionguard-service
   namespace: visionguard
 spec:
-  type: NodePort
+  type: LoadBalancer
   selector:
     app: visionguard
   ports:
     - protocol: TCP
       port: 5000
       targetPort: 5000
-      nodePort: 30000
