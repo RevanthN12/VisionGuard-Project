@@ -324,13 +324,10 @@ async function startMonitoring(camId) {
                 const feedUrl = `${API_URL}/video_feed/${cid}?t=${new Date().getTime()}`;
                 const videoFeed = document.getElementById(cid === 'camera1' ? 'cam1-video' : 'cam2-video');
                 videoFeed.src = feedUrl;
-                
-                videoFeed.onload = () => {
-                    if (overlay) {
-                        overlay.style.opacity = '0';
-                        overlay.classList.add('hidden');
-                    }
-                };
+                if (overlay) {
+                    overlay.style.opacity = '0';
+                    overlay.classList.add('hidden');
+                }
             }
             startPolling();
         } else {
