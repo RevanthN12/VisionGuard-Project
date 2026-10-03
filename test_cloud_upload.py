@@ -1,21 +1,13 @@
 import os
 import time
-import cv2
 import cloud_storage
 
-# Create a temporary test image
-test_img_path = "outputs/evidence/images/cloud_test_image.jpg"
-os.makedirs("outputs/evidence/images", exist_ok=True)
+# Test video path
+test_vid_path = "test.mp4"
 
-# Generate a blank red image
-img = cv2.resize(cv2.imread("website/assets/hero.jpg", 1), (640, 480))
-cv2.putText(img, "CLOUD STORAGE TEST", (50, 240), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-cv2.imwrite(test_img_path, img)
-
-print(f"Created test image at: {test_img_path}")
-print("Attempting to upload to Cloudinary...")
-
-# Upload
-cloud_storage.upload_evidence(test_img_path, resource_type="image")
-
-print("Upload command sent! Check your Cloudinary Dashboard in a few seconds.")
+if os.path.exists(test_vid_path):
+    print(f"Testing Cloud Video Storage Upload for: {test_vid_path}...")
+    cloud_storage.upload_evidence(test_vid_path, resource_type="video")
+    print("Upload command dispatched asynchronously! Check server logs for URL confirmation.")
+else:
+    print(f"Test video not found at {test_vid_path}")
