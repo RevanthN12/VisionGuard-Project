@@ -1,87 +1,34 @@
---extra-index-url https://download.pytorch.org/whl/cpu
-altair
-anyio
-attrs
-beautifulsoup4
-blinker
-cachetools
-certifi
-charset-normalizer
-click
-colorama
-contourpy
-cycler
-defusedxml
-filelock
-Flask
-flask-cors
-fonttools
-fpdf2
-fsspec
-gitdb
-GitPython
-h11
-httptools
-idna
-imageio-ffmpeg
-itsdangerous
-Jinja2
-joblib
-jsonschema
-jsonschema-specifications
-kiwisolver
-lapx
-MarkupSafe
-matplotlib
-mpmath
-narwhals
-networkx
-numpy
-opencv-python
-packaging
-pandas
-pillow
-plotly
-polars
-protobuf
-psutil
-pyarrow
-pydeck
-pyparsing
-python-dateutil
-python-dotenv
-python-multipart
-PyYAML
-referencing
-requests
-rpds-py
-scikit-learn
-scipy
-setuptools
-six
-smmap
-soupsieve
-starlette
-streamlit
-sympy
-tenacity
-threadpoolctl
-toml
-torch
-torchvision
-typing_extensions
-tzdata
-ultralytics
-ultralytics-thop
-urllib3
-uvicorn
-watchdog
-websockets
-Werkzeug
-wikipedia
+# VisionGuard AI - Requirements
+# Install with: pip install -r requirements.txt
 
-cloudinary
-prometheus-client
-pytest
-safety
+# Core
+flask==3.1.3
+flask-cors==6.0.5
+werkzeug==3.1.8
+python-dotenv==1.2.2
 
+# Computer Vision & AI
+opencv-python==4.13.0.92
+ultralytics==8.4.51
+torch==2.12.0
+torchvision==0.27.0
+numpy==2.5.1
+
+# Video processing
+imageio-ffmpeg==0.6.0
+
+# Telegram alerts
+requests==2.34.2
+
+# PDF Reports
+fpdf2==2.8.7
+reportlab==5.0.0
+
+# Data & Utils
+pandas==3.0.3
+scikit-learn==1.9.0
+scipy==1.17.1
+pillow==12.2.0
+cloudinary==1.46.2
+psutil==7.2.2
+matplotlib==3.10.9
