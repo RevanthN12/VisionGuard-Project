@@ -1,9 +1,13 @@
 import os
+import logging
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["MKL_NUM_THREADS"] = "1"
 os.environ["NUMEXPR_NUM_THREADS"] = "1"
 os.environ["VECLIB_MAXIMUM_THREADS"] = "1"
+
+# Suppress Flask stderr warnings to prevent PowerShell NativeCommandError
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 import time
 import math
