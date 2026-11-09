@@ -82,11 +82,13 @@ class AlertManager:
         if self._sound_enabled and level in ("HIGH RISK", "CRITICAL"):
             self._play_sound(level)
 
-        # External Alerts (Email & WhatsApp)
+        # External Alerts (Telegram, Email, etc.)
         if config.EXTERNAL_ALERTS_ENABLED and level in config.EXTERNAL_ALERT_LEVELS:
-            if not self._active_external_incident:
+            last_ext = getattr(self, "_last_external_dispatch_time", 0)
+            if not self._active_external_incident or (now - last_ext) >= 15:
                 self._trigger_external_alerts(level, message, evidence_path, risk_result, density_result, camera_label)
                 self._active_external_incident = True
+                self._last_external_dispatch_time = now
 
         return alert
 
@@ -138,16 +140,22 @@ class AlertManager:
             if evidence_path:
                 body += f"📁 Evidence    : {evidence_path}\n"
                 
+            peak_crowd = max(people, int(stats.get('max_people', 0)))
+            avg_crowd = max(people, int(stats.get('avg_people', 0)))
+            max_risk = max(score, float(stats.get('max_risk', 0)))
+            total_incidents = max(1, int(stats.get('total_incidents', 0)))
+            total_alerts = stats.get('total_alerts', 0)
+
             body += (
                 f"⚡ Status      : 🔴 {level}: Risk score {score:.1f}%.  Immediate intervention required.\n\n\n"
                 f"==============================\n"
                 f"📋 SESSION REPORT\n"
                 f"==============================\n"
-                f"👥 Peak Crowd     : {stats.get('max_people', 0)} people\n"
-                f"📊 Avg Crowd      : {stats.get('avg_people', 0):.0f} people\n"
-                f"🔥 Max Risk Score : {stats.get('max_risk', 0):.0f}%\n"
-                f"🚨 Total Incidents: {stats.get('total_incidents', 0)}\n"
-                f"⚠️  Total Alerts   : {stats.get('total_alerts', 0)}\n"
+                f"👥 Peak Crowd     : {peak_crowd} people\n"
+                f"📊 Avg Crowd      : {avg_crowd} people\n"
+                f"🔥 Max Risk Score : {max_risk:.0f}%\n"
+                f"🚨 Total Incidents: {total_incidents}\n"
+                f"⚠️  Total Alerts   : {total_alerts}\n"
                 f"🕒 Timestamp      : {timestamp_now}\n"
                 f"==============================\n"
                 f"📌 Recent Incidents:\n"

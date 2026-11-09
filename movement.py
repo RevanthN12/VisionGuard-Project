@@ -38,22 +38,22 @@ class MovementAnalyzer:
     """
 
     def __init__(self,
-                 target_w: int = config.FRAME_WIDTH,
-                 target_h: int = config.FRAME_HEIGHT):
+                 target_w: int = 320,
+                 target_h: int = 240):
         self._target_w   = target_w
         self._target_h   = target_h
         self._prev_gray  = None          # previous grayscale frame
         self._speed_hist = []            # rolling speed history
         self._hist_size  = 30
 
-        # Farneback parameters (tuned for CPU)
+        # Farneback parameters (tuned for high-speed real-time CPU execution)
         self._fb_params = dict(
             pyr_scale   = 0.5,
-            levels      = 3,
-            winsize     = 13,
-            iterations  = 3,
+            levels      = 2,
+            winsize     = 11,
+            iterations  = 2,
             poly_n      = 5,
-            poly_sigma  = 1.2,
+            poly_sigma  = 1.1,
             flags       = 0,
         )
 
@@ -179,22 +179,27 @@ class MovementAnalyzer:
     def _draw_flow(self, frame, flow, magnitude) -> np.ndarray:
         """Draw sparse optical flow arrows on a dark overlay."""
         vis = frame.copy()
-        step = 24
-        h, w = vis.shape[:2]
-        for y in range(0, h, step):
-            for x in range(0, w, step):
+        step = 16
+        h_f, w_f = flow.shape[:2]
+        h_v, w_v = vis.shape[:2]
+        scale_x = w_v / float(w_f) if w_f > 0 else 1.0
+        scale_y = h_v / float(h_f) if h_f > 0 else 1.0
+        for y in range(0, h_f, step):
+            for x in range(0, w_f, step):
                 mag = magnitude[y, x]
                 if mag < 0.5:
                     continue
-                fx_val = flow[y, x, 0]
-                fy_val = flow[y, x, 1]
-                ex = int(x + fx_val * 3)
-                ey = int(y + fy_val * 3)
-                ex = max(0, min(ex, w - 1))
-                ey = max(0, min(ey, h - 1))
+                fx_val = flow[y, x, 0] * scale_x
+                fy_val = flow[y, x, 1] * scale_y
+                vx = int(x * scale_x)
+                vy = int(y * scale_y)
+                ex = int(vx + fx_val * 3)
+                ey = int(vy + fy_val * 3)
+                ex = max(0, min(ex, w_v - 1))
+                ey = max(0, min(ey, h_v - 1))
                 intensity = min(int(mag * 20), 255)
                 color = (0, intensity, 255 - intensity)
-                cv2.arrowedLine(vis, (x, y), (ex, ey), color, 1, tipLength=0.4)
+                cv2.arrowedLine(vis, (vx, vy), (ex, ey), color, 1, tipLength=0.4)
         return vis
 
     def _zero_result(self) -> dict:

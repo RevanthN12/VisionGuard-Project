@@ -242,6 +242,17 @@ def get_session_stats(video_source: str = None) -> dict:
                 WHERE video_source LIKE ?
             """, (f"%{video_source}%",)).fetchone()
             incidents = conn.execute("SELECT COUNT(*) FROM incidents WHERE video_source LIKE ?", (f"%{video_source}%",)).fetchone()[0]
+            if not r or not r["frames"]:
+                # Fallback to general session metrics if specific source label is unmapped
+                r = conn.execute("""
+                    SELECT COUNT(*) as frames,
+                           MAX(person_count) as max_people,
+                           AVG(person_count) as avg_people,
+                           MAX(risk_score)   as max_risk,
+                           AVG(risk_score)   as avg_risk
+                    FROM monitoring_history
+                """).fetchone()
+                incidents = conn.execute("SELECT COUNT(*) FROM incidents").fetchone()[0]
         else:
             r = conn.execute("""
                 SELECT COUNT(*) as frames,

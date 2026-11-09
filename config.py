@@ -26,11 +26,18 @@ PROCESSED_VID_DIR = os.path.join(BASE_DIR, "outputs", "processed_videos")
 SOUNDS_DIR        = os.path.join(BASE_DIR, "sounds")
 SAMPLE_VIDEOS_DIR = os.path.join(BASE_DIR, "videos", "sample_videos")
 
-# ── YOLO inference ──────────────────────────────────────────────────────────
+# ── YOLO & Multi-level Detection ────────────────────────────────────────────
 YOLO_CONF         = 0.20        # Confidence threshold
 YOLO_IMGSZ        = 320         # Optimized 320px inference size for 10x faster real-time CPU FPS
 YOLO_CLASSES      = [0, 24, 26, 28]         # 0=person, 24=backpack, 26=handbag, 28=suitcase
 FRAME_SKIP        = 1           # Process every frame for smooth real-time video
+
+# ── Multi-Level Detection & Fusion Thresholds ──────────────────────────────
+PERSON_CONFIDENCE_THRESHOLD = float(os.getenv("PERSON_CONFIDENCE_THRESHOLD", "0.35"))
+HEAD_CONFIDENCE_THRESHOLD   = float(os.getenv("HEAD_CONFIDENCE_THRESHOLD", "0.30"))
+FACE_CONFIDENCE_THRESHOLD   = float(os.getenv("FACE_CONFIDENCE_THRESHOLD", "0.35"))
+FUSION_IOU_THRESHOLD        = float(os.getenv("FUSION_IOU_THRESHOLD", "0.35"))
+FUSION_CONTAINMENT_THRESHOLD  = float(os.getenv("FUSION_CONTAINMENT_THRESHOLD", "0.40"))
 
 # ── Video Settings (1.0x Real-time Normal Speed) ─────────────────────────────
 FRAME_WIDTH       = 640
@@ -57,10 +64,10 @@ RISK_W_CONGESTION = 0.10
 RISK_W_THREAT     = 0.10
 
 # ── Risk level thresholds (0–100) ────────────────────────────────────────────
-RISK_SAFE         = 30
-RISK_CAUTION      = 50
-RISK_WARNING      = 70
-RISK_HIGH         = 85
+RISK_SAFE         = 25
+RISK_CAUTION      = 45
+RISK_WARNING      = 65
+RISK_HIGH         = 80
 
 # ── Alert cooldown (seconds between repeated alerts per level) ───────────────
 ALERT_COOLDOWN    = {
@@ -74,7 +81,7 @@ ALERT_COOLDOWN    = {
 CONGESTION_FRAMES = 30          # Consecutive frames of HIGH density = congested
 
 # ── Evidence recording (Normal Speed Video Clip) ──────────────────────────────
-EVIDENCE_MIN_RISK = "HIGH RISK"   # Minimum risk level to save evidence
+EVIDENCE_MIN_RISK = "WARNING"   # Minimum risk level to save evidence
 EVIDENCE_CLIP_SEC = 5           # Video clip duration in seconds
 EVIDENCE_FPS      = 25.0        # 25 FPS matching normal real-time video playback
 
@@ -89,7 +96,7 @@ for _d in [EVIDENCE_IMG_DIR, EVIDENCE_VID_DIR, REPORTS_DIR,
 
 # -- External Alerts ----------------------------------------------------------
 EXTERNAL_ALERTS_ENABLED = True
-EXTERNAL_ALERT_LEVELS = {'HIGH RISK', 'CRITICAL'}
+EXTERNAL_ALERT_LEVELS = {'WARNING', 'HIGH RISK', 'CRITICAL'}
 
 # --- CLOUD STORAGE CONFIG ---
 CLOUD_STORAGE_ENABLED = True

@@ -19,17 +19,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Initialize chart & dropdowns
         initChart();
         fetchSamples();
+        fetchConnectedCameras();
+        toggleSourceInputs();
         
-        // Auto-connect video feeds to active surveillance stream
+        // Initialize video feed overlays (waiting for user to click Start)
         ['camera1', 'camera2'].forEach(cid => {
             const v = document.getElementById(cid === 'camera1' ? 'cam1-video' : 'cam2-video');
             const el = document.getElementById(cid === 'camera1' ? 'cam1-overlay' : 'cam2-overlay');
-            if (v) {
-                v.src = `${API_URL}/video_feed/${cid}?t=${new Date().getTime()}`;
-                if (el) {
-                    el.style.opacity = '0';
-                    el.classList.add('hidden');
-                }
+            if (v) v.src = "";
+            if (el) {
+                el.innerHTML = `<div style="text-align: center;"><div style="font-size: 1.8rem; margin-bottom: 8px;">📹</div><div style="font-weight: 600; font-size: 1rem;">CAMERA OFFLINE</div><div style="font-size: 0.8rem; color: #a0abc0; margin-top: 4px;">Select source & click ▶ Start to begin</div></div>`;
+                el.classList.remove('hidden');
+                el.style.opacity = '1';
+                el.style.display = 'flex';
             }
         });
 
@@ -259,8 +261,16 @@ function switchTab(tabId) {
 function toggleSourceInputs() {
     const srcType = document.getElementById('sourceType').value;
     document.getElementById('webcamInput').classList.toggle('hidden', srcType !== 'Webcam');
-    document.getElementById('sampleInput').classList.toggle('hidden', srcType !== 'Sample');
+    document.getElementById('sampleInput').classList.toggle('hidden', srcType !== 'Sample' && srcType !== 'Upload');
     document.getElementById('rtspInput').classList.toggle('hidden', srcType !== 'RTSP');
+
+    if (srcType === 'Webcam') {
+        fetchConnectedCameras();
+    }
+    if (srcType === 'Upload') {
+        const fileInput = document.getElementById('videoUploadInput');
+        if (fileInput) fileInput.click();
+    }
 }
 
 async function fetchSamples() {
@@ -268,15 +278,173 @@ async function fetchSamples() {
         const res = await fetchWithAuth(`${API_URL}/api/samples`);
         const data = await res.json();
         const select = document.getElementById('sampleFile');
+        if (!select) return;
+        const currentVal = select.value;
         select.innerHTML = '';
         data.samples.forEach(s => {
             const opt = document.createElement('option');
             opt.value = s;
             opt.textContent = s;
+            if (s === currentVal) opt.selected = true;
             select.appendChild(opt);
         });
     } catch(e) { console.error("Failed to load samples", e); }
 }
+
+async function fetchConnectedCameras() {
+    try {
+        const res = await fetchWithAuth(`${API_URL}/api/detect_cameras`);
+        const data = await res.json();
+        const select = document.getElementById('webcamSelect');
+        const input = document.getElementById('webcamIndex');
+        if (!select) return;
+        const currentVal = input && input.value !== "" ? input.value : (select.value !== "" ? select.value : "0");
+        select.innerHTML = '';
+        
+        // Build map of detected cameras
+        const detectedMap = {};
+        if (data && data.cameras) {
+            data.cameras.forEach(c => {
+                detectedMap[c.index] = c.label;
+            });
+        }
+        
+        // Always provide indices 0, 1, 2, 3, 4 so the user can select ANY camera number
+        for (let idx = 0; idx <= 4; idx++) {
+            const opt = document.createElement('option');
+            opt.value = idx;
+            if (detectedMap[idx]) {
+                opt.textContent = `🟢 ${detectedMap[idx]}`;
+            } else if (idx === 0) {
+                opt.textContent = `Webcam #0 (Default / Built-in Camera)`;
+            } else {
+                opt.textContent = `Webcam #${idx} (USB / External Camera)`;
+            }
+            if (String(idx) === String(currentVal)) {
+                opt.selected = true;
+            }
+            select.appendChild(opt);
+        }
+        
+        if (input) {
+            input.value = select.value;
+        }
+    } catch(e) { console.error("Failed to detect cameras", e); }
+}
+
+function updateWebcamFromInput(val) {
+    const num = parseInt(val);
+    const select = document.getElementById('webcamSelect');
+    if (select && !isNaN(num)) {
+        let found = false;
+        for (let i = 0; i < select.options.length; i++) {
+            if (parseInt(select.options[i].value) === num) {
+                select.selectedIndex = i;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            const opt = document.createElement('option');
+            opt.value = num;
+            opt.textContent = `Webcam #${num}`;
+            opt.selected = true;
+            select.appendChild(opt);
+        }
+    }
+}
+window.updateWebcamFromInput = updateWebcamFromInput;
+
+async function refreshCameras() {
+    const note = document.getElementById('webcamDetectedNote');
+    if (note) note.textContent = "Scanning for USB cameras...";
+    await fetchConnectedCameras();
+    const count = document.getElementById('webcamSelect')?.options?.length || 0;
+    if (note) {
+        note.textContent = "Cameras synced! Indices 0, 1, 2, 3, 4 ready.";
+        setTimeout(() => { if (note) note.textContent = ""; }, 4000);
+    }
+}
+window.refreshCameras = refreshCameras;
+
+function triggerVideoUpload() {
+    const fileInput = document.getElementById('videoUploadInput');
+    if (fileInput) fileInput.click();
+}
+window.triggerVideoUpload = triggerVideoUpload;
+
+async function handleVideoUpload(event) {
+    const file = event.target.files ? event.target.files[0] : null;
+    if (!file) return;
+
+    console.log("📁 Selected file for upload:", file.name, file.size, file.type);
+    const progressDiv = document.getElementById('uploadProgress');
+    if (progressDiv) {
+        const szMb = (file.size / (1024 * 1024)).toFixed(1);
+        progressDiv.textContent = `⏳ Uploading "${file.name}" (${szMb} MB)...`;
+        progressDiv.classList.remove('hidden');
+    }
+
+    const formData = new FormData();
+    formData.append('video', file);
+
+    try {
+        const response = await fetch(`${API_URL}/api/upload_video`, {
+            method: 'POST',
+            credentials: 'include',
+            body: formData
+        });
+
+        const resText = await response.text();
+        let data = {};
+        try {
+            data = JSON.parse(resText);
+        } catch (parseErr) {
+            console.error("Non-JSON response from server:", resText);
+            throw new Error(`Server returned status ${response.status}. Please make sure server is running and file size is under 1GB.`);
+        }
+        console.log("Upload server response:", data);
+
+        if (response.ok && data.success) {
+            if (progressDiv) {
+                progressDiv.textContent = `✅ Uploaded "${data.filename}"!`;
+                setTimeout(() => progressDiv.classList.add('hidden'), 5000);
+            }
+
+            const select = document.getElementById('sampleFile');
+            if (select && data.samples) {
+                select.innerHTML = '';
+                data.samples.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s;
+                    opt.textContent = s;
+                    if (s === data.filename) opt.selected = true;
+                    select.appendChild(opt);
+                });
+            }
+
+            const srcSelect = document.getElementById('sourceType');
+            if (srcSelect) {
+                srcSelect.value = 'Sample';
+                toggleSourceInputs();
+            }
+
+            alert(`Crowd video file "${data.filename}" uploaded successfully!\n\nIt is now selected in your video sources. Click "▶ Cam 1" or "▶ Both Cameras" to start AI analysis.`);
+        } else {
+            const err = data.error || `Upload failed with HTTP code ${response.status}`;
+            console.error("❌ Upload server error:", err);
+            alert(`Upload Error: ${err}`);
+            if (progressDiv) progressDiv.classList.add('hidden');
+        }
+    } catch (e) {
+        console.error("❌ Video upload network/JS error:", e);
+        alert(`Failed to upload video file: ${e.message || 'Connection error'}.`);
+        if (progressDiv) progressDiv.classList.add('hidden');
+    } finally {
+        event.target.value = '';
+    }
+}
+window.handleVideoUpload = handleVideoUpload;
 
 async function startMonitoring(camId) {
     console.log("🎬 Starting monitoring...", camId);
@@ -289,14 +457,20 @@ async function startMonitoring(camId) {
             overlay.innerHTML = '<div class="spinner"></div><div style="text-align: center;"><div style="font-size: 1.2rem; margin-top: 12px;">Starting Camera...</div></div>';
             overlay.classList.remove('hidden');
             overlay.style.opacity = '1';
+            overlay.style.display = 'flex';
         }
     }
     
     const srcType = document.getElementById('sourceType').value;
     let param = 0;
-    if (srcType === 'Webcam') param = parseInt(document.getElementById('webcamIndex').value);
-    else if (srcType === 'Sample') param = document.getElementById('sampleFile').value;
-    else if (srcType === 'RTSP') param = document.getElementById('rtspUrl').value;
+    if (srcType === 'Webcam') {
+        const sel = document.getElementById('webcamSelect');
+        param = (sel && sel.value !== "" && !isNaN(parseInt(sel.value))) ? parseInt(sel.value) : (parseInt(document.getElementById('webcamIndex')?.value) || 0);
+    } else if (srcType === 'Sample') {
+        param = document.getElementById('sampleFile')?.value || "crowd_sample_1.mp4";
+    } else if (srcType === 'RTSP') {
+        param = document.getElementById('rtspUrl')?.value || "";
+    }
 
     try {
         const response = await fetchWithAuth(`${API_URL}/api/start`, {
@@ -318,32 +492,48 @@ async function startMonitoring(camId) {
                         overlay.innerHTML = `<div style="text-align: center; color: #ff6b6b;"><div style="font-size: 1.5rem;">⚠️</div><div style="margin-top: 12px;">Camera Offline</div></div>`;
                         overlay.classList.remove('hidden');
                         overlay.style.opacity = '1';
+                        overlay.style.display = 'flex';
                     }
                     continue;
                 }
                 const feedUrl = `${API_URL}/video_feed/${cid}?t=${new Date().getTime()}`;
                 const videoFeed = document.getElementById(cid === 'camera1' ? 'cam1-video' : 'cam2-video');
-                videoFeed.src = feedUrl;
+                if (videoFeed) {
+                    videoFeed.src = ""; // Unbind previous stream
+                    setTimeout(() => { videoFeed.src = feedUrl; }, 50);
+                }
                 if (overlay) {
                     overlay.style.opacity = '0';
+                    overlay.style.display = 'none';
                     overlay.classList.add('hidden');
                 }
             }
             startPolling();
         } else {
             console.error("❌ Start failed:", data.error);
+            const errMsg = data.error || "Failed to start camera.";
+            alert(`⚠️ Camera Start Failed: ${errMsg}`);
+            for (let cid of cameras) {
+                const overlay = document.getElementById(cid === 'camera1' ? 'cam1-overlay' : 'cam2-overlay');
+                if (overlay) {
+                    overlay.innerHTML = `<div style="text-align: center; color: #ff6b6b;"><div style="font-size: 1.5rem;">⚠️</div><div style="margin-top: 8px; font-weight: 600;">Failed to Start</div><div style="font-size: 0.8rem; color: #ccc; margin-top: 4px;">${errMsg}</div></div>`;
+                    overlay.classList.remove('hidden');
+                    overlay.style.opacity = '1';
+                    overlay.style.display = 'flex';
+                }
+            }
         }
     } catch (e) { 
         console.error("❌ Start error:", e);
-    } finally {
+        alert(`❌ Network or server error: ${e.message}`);
         for (let cid of cameras) {
             const overlay = document.getElementById(cid === 'camera1' ? 'cam1-overlay' : 'cam2-overlay');
-            setTimeout(() => {
-                if (overlay) {
-                    overlay.style.opacity = '0';
-                    overlay.classList.add('hidden');
-                }
-            }, 800);
+            if (overlay) {
+                overlay.innerHTML = `<div style="text-align: center; color: #ff6b6b;"><div style="font-size: 1.5rem;">⚠️</div><div style="margin-top: 8px;">Error Connecting to Server</div></div>`;
+                overlay.classList.remove('hidden');
+                overlay.style.opacity = '1';
+                overlay.style.display = 'flex';
+            }
         }
     }
 }
@@ -359,33 +549,42 @@ async function stopMonitoring(camId) {
         let cameras = camId === 'both' ? ['camera1', 'camera2'] : [camId];
         for (let cid of cameras) {
             const videoFeed = document.getElementById(cid === 'camera1' ? 'cam1-video' : 'cam2-video');
-            videoFeed.src = "";
+            if (videoFeed) videoFeed.src = "";
             const overlay = document.getElementById(cid === 'camera1' ? 'cam1-overlay' : 'cam2-overlay');
-            overlay.classList.remove('hidden');
-            overlay.style.opacity = '1';
-            overlay.innerHTML = `<div style="text-align: center; color: #ff6b6b;"><div style="font-size: 1.5rem;">⚠️</div><div style="margin-top: 12px;">Camera Offline</div></div>`;
+            if (overlay) {
+                overlay.classList.remove('hidden');
+                overlay.style.display = 'flex';
+                overlay.style.opacity = '1';
+                overlay.innerHTML = `<div style="text-align: center;"><div style="font-size: 1.8rem; margin-bottom: 8px;">📹</div><div style="font-weight: 600; font-size: 1rem;">CAMERA OFFLINE</div><div style="font-size: 0.8rem; color: #a0abc0; margin-top: 4px;">Select source & click ▶ Start to begin</div></div>`;
+            }
             
             ['kpiCount', 'kpiDensity', 'kpiMovement', 'kpiRisk', 'kpiStatus', 'subDensity', 'subMovement', 'subRisk', 'lblBehavior', 'lblViolence', 'lblWeapon', 'lblAudio', 'lblAction'].forEach(id => {
                 const el = document.getElementById(`${id}-${cid}`);
                 if (el) el.textContent = '—';
             });
-            document.getElementById(`riskCard-${cid}`).className = 'kpi-card glass-panel risk-card';
+            const rCard = document.getElementById(`riskCard-${cid}`);
+            if (rCard) rCard.className = 'kpi-card glass-panel risk-card';
         }
-        
-    } catch (e) { console.error("Stop failed", e); }
+    } catch(e) { console.error("Stop error", e); }
 }
 
 
-async function toggleSim(type) {
-    const elId = 'sim' + type.charAt(0).toUpperCase() + type.slice(1);
-    const el = document.getElementById(elId);
-    let active = true;
-    if (el && el.type === 'checkbox') {
-        active = el.checked;
-    } else {
-        window.simState = window.simState || {};
-        window.simState[type] = !window.simState[type];
-        active = window.simState[type];
+async function toggleSim(type, btn) {
+    window.simState = window.simState || {};
+    window.simState[type] = !window.simState[type];
+    const active = window.simState[type];
+    if (btn) {
+        if (active) {
+            btn.style.borderColor = '#ff0055';
+            btn.style.background = 'rgba(255, 0, 85, 0.28)';
+            btn.style.color = '#ff0055';
+            btn.style.fontWeight = 'bold';
+        } else {
+            btn.style.borderColor = '';
+            btn.style.background = '';
+            btn.style.color = '';
+            btn.style.fontWeight = '';
+        }
     }
     console.log(`🔬 Triggering simulation: ${type} = ${active}`);
     await fetchWithAuth(`${API_URL}/api/simulate`, {
@@ -394,7 +593,34 @@ async function toggleSim(type) {
         body: JSON.stringify({ type: type, active: active })
     });
 }
+window.toggleSim = toggleSim;
 window.toggleSimulation = toggleSim;
+
+async function sendTestTelegramAlert() {
+    const btn = document.getElementById('btnTestTelegram');
+    const oldText = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.innerHTML = '⏳ Sending to Telegram...';
+        btn.disabled = true;
+    }
+    try {
+        const res = await fetchWithAuth(`${API_URL}/api/test_telegram`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+            alert('✅ Telegram Alert Dispatched! Check your Telegram app.');
+        } else {
+            alert('⚠️ ' + (data.message || 'Telegram alert failed. Please verify credentials.'));
+        }
+    } catch (e) {
+        alert('❌ Network error: ' + e.message);
+    } finally {
+        if (btn) {
+            btn.innerHTML = oldText;
+            btn.disabled = false;
+        }
+    }
+}
+window.sendTestTelegramAlert = sendTestTelegramAlert;
 
 function updateAlertBanner(data) {
     const alertBanner = document.getElementById('alertBanner');
@@ -742,11 +968,6 @@ async function clearDatabase() {
     } catch(e) { console.error(e); }
 }
 
-window.onload = () => {
-    initChart();
-    fetchSamples();
-    startPolling(); // Always poll to get running status
-};
 
 function updateAdminParam(key, value) {
     if (key === 'yolo_conf') document.getElementById('valYoloConf').innerText = value + '%';

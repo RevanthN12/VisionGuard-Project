@@ -8,7 +8,21 @@ A real-time intelligent crowd monitoring and stampede risk prediction system int
 
 ## 🛠️ Technology Stack & DevOps Integration
 
-- **AI/ML Core**: Python 3.10, YOLOv8 (person & weapon detection), OpenCV (Farneback Optical Flow), PyTorch, SQLite.
+- **AI/ML Core**: Python 3.10, YOLOv8 (primary person & weapon detection), Dedicated HeadDetector (upper body/head regions), OpenCV Face Detector (privacy-compliant spatial presence detection), Spatial Detection Fusion Engine (IoU, IoA containment matching & NMS duplicate suppression), OpenCV (Farneback Optical Flow), PyTorch, SQLite.
+
+---
+
+## 🔬 Research & Detection Methodology
+
+VisionGuard uses a **Multi-Level Person Detection Strategy** to deliver accurate crowd counting under challenging real-world surveillance conditions:
+
+> *"Full-body person detection is performed using YOLOv8, while head/face detection provides supporting evidence for partially visible or heavily occluded individuals. A detection-fusion mechanism reduces duplicate counting before crowd density estimation."*
+
+### Key Advantages Over Full-Body-Only Detectors:
+1. **Multi-Level Visibility**: Counts individuals whether full-body, upper-body, head-only, or face-only is visible in camera frame.
+2. **Dense Crowd Handling**: Detects partially occluded individuals in crowded scenes where lower bodies are blocked by other people or obstacles.
+3. **Detection Fusion & Zero Double Counting**: Uses spatial Intersection-over-Union ($IoU \ge 0.35$), containment ratio ($IoA \ge 0.40$), and Non-Maximum Suppression (NMS) to match person, head, and face detections belonging to the same individual into a single **Unique Person Count**.
+4. **Strict Safety & Privacy Guarantee**: Face detection is strictly spatial (presence/location bounding box only). No face recognition, identity matching, or biometric databases are used.
 - **Web App & Server**: Flask, HTML5/CSS3, JavaScript (WebSockets/MJPEG live streaming).
 - **Source Control**: GitHub (`main` branch).
 - **CI/CD Platform**: Jenkins (`Jenkinsfile` 11-stage automated pipeline).

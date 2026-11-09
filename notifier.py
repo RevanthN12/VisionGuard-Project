@@ -89,29 +89,36 @@ def send_telegram_alert(message: str, image_path: str = None) -> bool:
     
     for chat_id in chat_ids:
         try:
-            print(f"[Notifier] Sending Telegram alert to {chat_id}...")
+            print(f"[Notifier] Sending Telegram alert to {chat_id}...", flush=True)
             url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
             data = {"chat_id": chat_id, "text": message}
             
             # Send text message
-            response = requests.post(url, data=data)
+            response = requests.post(url, data=data, timeout=10)
             
-            # Send photo if provided
+            # Send evidence attachment (photo or video clip) if provided
             if image_path and os.path.exists(image_path) and os.path.getsize(image_path) > 1000:
-                photo_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
-                with open(image_path, 'rb') as photo:
-                    files = {'photo': photo}
-                    data_photo = {'chat_id': chat_id}
-                    requests.post(photo_url, data=data_photo, files=files)
+                ext = os.path.splitext(image_path)[1].lower()
+                try:
+                    if ext in ('.jpg', '.jpeg', '.png'):
+                        photo_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto"
+                        with open(image_path, 'rb') as photo:
+                            requests.post(photo_url, data={'chat_id': chat_id, 'caption': '📸 VisionGuard Incident Evidence'}, files={'photo': photo}, timeout=15)
+                    elif ext in ('.mp4', '.avi', '.mov', '.mkv'):
+                        video_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendVideo"
+                        with open(image_path, 'rb') as video:
+                            requests.post(video_url, data={'chat_id': chat_id, 'caption': '🎥 VisionGuard Incident Video Clip'}, files={'video': video}, timeout=25)
+                except Exception as attach_err:
+                    print(f"[Notifier] Telegram attachment delivery warning: {attach_err}", flush=True)
                     
             if response.status_code == 200:
-                print(f"[Notifier] [SUCCESS] Telegram alert sent to {chat_id} successfully!")
+                print(f"[Notifier] [SUCCESS] Telegram alert sent to {chat_id} successfully!", flush=True)
             else:
-                print(f"[Notifier] Telegram API error for {chat_id}: {response.text}")
+                print(f"[Notifier] Telegram API error for {chat_id}: {response.text}", flush=True)
                 overall_success = False
                 
         except Exception as e:
-            print(f"[Notifier] Telegram automation error for {chat_id}: {e}")
+            print(f"[Notifier] Telegram automation error for {chat_id}: {e}", flush=True)
             overall_success = False
             
     return overall_success

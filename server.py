@@ -44,6 +44,7 @@ except ImportError:
 app = Flask(__name__, static_folder='frontend', static_url_path='/')
 app.secret_key = 'super_secret_key_for_vision_guard'
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+app.config['MAX_CONTENT_LENGTH'] = 1000 * 1024 * 1024  # 1 GB max upload
 CORS(app, supports_credentials=True)
 
 @app.after_request
@@ -56,14 +57,36 @@ def add_header(response):
 @app.before_request
 def require_login():
     # Only protect API routes
-    if request.path.startswith('/api/') and request.path not in ('/api/login', '/api/logout', '/api/me'):
+    unprotected = ('/api/login', '/api/logout', '/api/me', '/api/upload_video', '/api/samples', '/api/auto-login')
+    if request.path.startswith('/api/') and request.path not in unprotected:
         if 'user_id' not in session:
-            return jsonify({"success": False, "error": "Unauthorized"}), 401
+            # Auto-assign guest session for open demo access
+            user = database.get_user('admin')
+            if user:
+                session['user_id'] = user['id']
+                session['username'] = user['username']
+                session['role'] = user['role']
+            else:
+                return jsonify({"success": False, "error": "Unauthorized"}), 401
         
-        # Check admin-only routes
-        admin_routes = ['/api/start', '/api/stop', '/api/simulate', '/api/settings/clear_db', '/api/config']
+        # Check admin-only routes (only destructive DB wipe requires admin)
+        admin_routes = ['/api/settings/clear_db']
         if request.path in admin_routes and session.get('role') != 'admin':
             return jsonify({"success": False, "error": "Admin privileges required"}), 403
+
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    return jsonify({"success": False, "error": "File size too large. Maximum allowed size is 1 GB."}), 413
+
+@app.errorhandler(500)
+def internal_server_error(error):
+    return jsonify({"success": False, "error": "Internal server error during video processing."}), 500
+
+@app.errorhandler(404)
+def not_found_error(error):
+    if request.path.startswith('/api/'):
+        return jsonify({"success": False, "error": f"API route '{request.path}' not found."}), 404
+    return send_from_directory('frontend', 'home.html'), 404
 
 @app.route('/api/login', methods=['POST'])
 def login():
@@ -107,6 +130,9 @@ def create_camera_state():
     return {
         "running": False,
         "vp": None,
+        "shared_from": None,
+        "raw_frame": None,
+        "frame_count": 0,
         "current_frame": None,
         "stats": {
             "person_count": 0,
@@ -149,6 +175,11 @@ def create_camera_state():
 state = {
     "camera1": create_camera_state(),
     "camera2": create_camera_state()
+}
+
+cam_locks = {
+    "camera1": threading.Lock(),
+    "camera2": threading.Lock()
 }
 
 # Initialize modules once
@@ -227,16 +258,28 @@ def video_processing_loop(camera_id):
 
     while True:
         try:
-            if not cam_state["running"] or cam_state["vp"] is None:
-                time.sleep(0.1)
-                continue
+            ok = False
+            frame = None
+            with cam_locks[camera_id]:
+                if cam_state["running"]:
+                    shared_src = cam_state.get("shared_from")
+                    if shared_src:
+                        other_st = state.get(shared_src, {})
+                        if other_st.get("running") and other_st.get("raw_frame") is not None:
+                            ok = True
+                            frame = other_st["raw_frame"].copy()
+                    elif cam_state["vp"] is not None:
+                        ok, frame = cam_state["vp"].read_frame()
+                        if ok and frame is not None:
+                            cam_state["raw_frame"] = frame.copy()
             
-            ok, frame = cam_state["vp"].read_frame()
-            if not ok:
+            if not ok or frame is None:
                 time.sleep(0.03)
                 continue
             
-            print(f"[Loop {camera_id}] Processing frame #{cam_state['vp'].frame_count}...", flush=True)
+            cam_state["frame_count"] = cam_state.get("frame_count", 0) + 1
+            if cam_state["frame_count"] % 30 == 0:
+                print(f"[Loop {camera_id}] Frame #{cam_state['frame_count']} (FPS: {cam_state.get('processing_fps', 0):.1f})", flush=True)
 
             # Dynamic loop execution FPS tracking for 1.0x normal-speed video recording
             loop_now = time.time()
@@ -248,7 +291,6 @@ def video_processing_loop(camera_id):
             cam_state["last_loop_t"] = loop_now
 
             # ── 1. Object Detection (People + Weapons) ───────────
-            # Always run real weapon detection
             run_weapons = True
             det = detection.detect_persons(frame, draw=True, detect_weapons=run_weapons)
             ann = det["annotated_frame"]
@@ -267,7 +309,18 @@ def video_processing_loop(camera_id):
             move = movement_an.analyze(frame)
             behv = behavior_an.analyze(dens, move)
             viol = violence_det.analyze(move, inject_simulation=cam_state["simulations"]["violence"])
-            weap = weapon_det.detect(ann, inject_simulation=cam_state["simulations"]["weapon"])
+            
+            # Fast weapon handling without redundant duplicate neural network inference
+            if cam_state["simulations"]["weapon"]:
+                weap = weapon_det.detect(ann, inject_simulation=True)
+            else:
+                weapon_boxes = [d for d in det["detections"] if d.get("is_weapon")]
+                weap = {
+                    "available": True,
+                    "detected": weapon_detected,
+                    "weapons": weapon_boxes,
+                    "score": max([d.get("confidence", 0) for d in weapon_boxes], default=0.0)
+                }
             risk = risk_pred.predict(dens, move, behv, viol, weap, people_count=cnt)
             
             # Audio processing
@@ -444,18 +497,17 @@ def video_processing_loop(camera_id):
             is_high_risk = current_val >= min_val
 
             if is_high_risk:
-                ev_img = recorder.maybe_save(ann, risk, dens, move, cnt, camera_label)
+                ev_img = recorder.save_snapshot(ann, risk, dens, move, cnt, camera_label)
                 if not getattr(recorder, "_recording", False):
                     actual_loop_fps = cam_state.get("processing_fps", 10.0)
-                    recorder.start_clip(ann, risk["level"], camera_label, fps=actual_loop_fps)
+                    recorder.start_clip(ann, risk["level"], camera_label, fps=actual_loop_fps, risk_score=risk.get("score", 0), person_count=cnt)
             
             if getattr(recorder, "_recording", False):
                 recorder.write_frame(ann, is_high_risk)
-                current_ev_path = getattr(recorder, "_current_clip", None) or (ev_img if is_high_risk else None)
-                if is_high_risk:
-                    risk["evidence_path"] = current_ev_path
+                current_ev_path = getattr(recorder, "_current_clip", None) or ev_img
+                risk["evidence_path"] = ev_img or current_ev_path or ""
             else:
-                current_ev_path = ev_img if is_high_risk else None
+                current_ev_path = ev_img or getattr(recorder, "_current_clip", None)
                 risk["evidence_path"] = current_ev_path or ""
 
             # Ensure the current frame is in the DB before alerts are processed
@@ -467,16 +519,16 @@ def video_processing_loop(camera_id):
 
             alrt = alerter.check(risk, behv, dens, camera_label)
 
-            if is_high_risk or alrt:
-                if is_high_risk:
-                    database.log_incident(
-                        cam_state["source_label"], cnt, dens, move, behv, viol, weap, risk,
-                        alrt["message"] if alrt else f"[{camera_label}] {risk['level']} ({risk['score']:.0f}%)",
-                        current_ev_path or "")
-                if alrt:
-                    database.log_alert(alrt)
-                if is_high_risk and current_ev_path:
-                    database.log_evidence(current_ev_path, risk["level"], risk["score"], cnt)
+            # Debounced incident logging (once every 12 seconds per camera, or on new alert)
+            last_inc_log = cam_state.get("last_incident_log", 0)
+            if alrt or (is_high_risk and (now - last_inc_log >= 12.0)):
+                cam_state["last_incident_log"] = now
+                database.log_incident(
+                    cam_state["source_label"], cnt, dens, move, behv, viol, weap, risk,
+                    alrt["message"] if alrt else f"[{camera_label}] {risk['level']} ({risk['score']:.0f}%)",
+                    current_ev_path or "")
+            if alrt:
+                database.log_alert(alrt)
 
             _draw_hud(ann, risk, cnt, dens, move, db)
 
@@ -512,8 +564,8 @@ def video_processing_loop(camera_id):
             cam_state["history"]["density"].append(dens["density_score"])
             cam_state["history"]["risk"].append(risk["score"])
 
-            # Store latest frame for MJPEG stream
-            ret, buffer = cv2.imencode('.jpg', ann)
+            # Store latest frame for MJPEG stream with high-speed JPEG compression
+            ret, buffer = cv2.imencode('.jpg', ann, [cv2.IMWRITE_JPEG_QUALITY, 80])
             if ret:
                 cam_state["current_frame"] = buffer.tobytes()
 
@@ -527,40 +579,8 @@ def video_processing_loop(camera_id):
 threading.Thread(target=video_processing_loop, args=("camera1",), daemon=True).start()
 threading.Thread(target=video_processing_loop, args=("camera2",), daemon=True).start()
 
-def auto_start_cameras():
-    try:
-        print("[Server] Auto-starting dual camera surveillance streams...")
-        # Start Camera 1 (Webcam or Sample or Synthetic)
-        vp1 = video_processor.VideoProcessor()
-        ok1 = vp1.open_webcam(0)
-        if not ok1:
-            samples = vp1.get_sample_videos()
-            if samples:
-                ok1 = vp1.open_sample(samples[0])
-            if not ok1:
-                ok1 = vp1.open_synthetic()
-        if ok1:
-            state["camera1"]["vp"] = vp1
-            state["camera1"]["running"] = True
-            state["camera1"]["source_label"] = "Webcam #0" if vp1.source_type == "webcam" else ("Sample 1" if vp1.source_type == "sample" else "Synthetic Stream")
-
-        # Start Camera 2 (Sample or Synthetic)
-        vp2 = video_processor.VideoProcessor()
-        samples2 = vp2.get_sample_videos()
-        fallback2 = samples2[1] if len(samples2) > 1 else (samples2[0] if samples2 else "crowd_sample_1.mp4")
-        ok2 = vp2.open_sample(fallback2)
-        if not ok2:
-            ok2 = vp2.open_synthetic()
-        if ok2:
-            state["camera2"]["vp"] = vp2
-            state["camera2"]["running"] = True
-            state["camera2"]["source_label"] = f"Sample: {fallback2}" if vp2.source_type == "sample" else "Synthetic Stream"
-        print(f"[Server] Auto-start complete: Camera 1={ok1}, Camera 2={ok2}")
-    except Exception as e:
-        print(f"[Server] Auto-start error: {e}")
-
-# Run auto-start at launch
-auto_start_cameras()
+# Server starts with cameras stopped by default. Cameras will open when user clicks Start in dashboard.
+print("[Server] Ready. Surveillance streams waiting for user start command...")
 
 # --- ROUTES ---
 @app.route('/')
@@ -622,110 +642,184 @@ def get_history():
         }
     })
 
+@app.route('/api/detect_cameras', methods=['GET'])
+def detect_cameras():
+    cams = video_processor.detect_available_webcams()
+    
+    # If a webcam is already actively running, ensure it remains in the detected list
+    running_indices = set()
+    for cid in ("camera1", "camera2"):
+        st = state[cid]
+        if st["running"] and st["vp"] and st["vp"].source_type == video_processor.VideoProcessor.SOURCE_WEBCAM:
+            try:
+                running_indices.add(int(st["vp"].source_path))
+            except Exception:
+                pass
+                
+    detected_indices = {c["index"] for c in cams}
+    for r_idx in running_indices:
+        if r_idx not in detected_indices:
+            cams.insert(0, {
+                "index": r_idx,
+                "label": f"Webcam #{r_idx} (Active In-Use)",
+                "name": f"Webcam #{r_idx}",
+                "resolution": "640x480"
+            })
+            
+    return jsonify({"success": True, "cameras": cams})
+
 @app.route('/api/start', methods=['POST'])
 def start_monitoring():
-    data = request.json
+    data = request.json or {}
     src_type = data.get("src_type", "Webcam")
     param = data.get("param", 0)
     camera_id = data.get("camera_id", "both")
 
-    # Clear frame history for new session so analytics only show the current session (preserves evidence)
+    # Clear frame history for new session so analytics only show current session
     database.clear_session_telemetry()
 
     def start_cam(cid, p):
-        cam_state = state[cid]
-        cam_analyzers = analyzers[cid]
-        cam_state["running"] = False
-        time.sleep(0.05)
-        if cam_state["vp"]:
-            cam_state["vp"].release()
-            cam_state["vp"] = None
-        vp = video_processor.VideoProcessor()
-        ok = False
+        with cam_locks[cid]:
+            cam_state = state[cid]
+            cam_analyzers = analyzers[cid]
+            cam_state["running"] = False
+            cam_state["shared_from"] = None
+            time.sleep(0.05)
+            if cam_state["vp"]:
+                cam_state["vp"].release()
+                cam_state["vp"] = None
+            vp = video_processor.VideoProcessor()
+            ok = False
 
-        if src_type == "Webcam":
-            try:
-                cam_idx = int(p)
-            except (ValueError, TypeError):
-                cam_idx = 0
-
-            # Prevent double-opening the same webcam device on single-webcam systems
-            other_cid = "camera2" if cid == "camera1" else "camera1"
-            other_state = state[other_cid]
-            if other_state["running"] and other_state["vp"] and other_state["vp"].source_type == video_processor.VideoProcessor.SOURCE_WEBCAM:
+            if src_type == "Webcam":
                 try:
-                    other_idx = int(other_state["vp"].source_path)
+                    cam_idx = int(p)
                 except (ValueError, TypeError):
-                    other_idx = 0
-                
-                if cam_idx == other_idx:
-                    # Switch target index for second camera so webcam 0 is never opened twice
-                    cam_idx = other_idx + 1
+                    cam_idx = 0
 
-            ok = vp.open_webcam(cam_idx)
-            cam_state["source_label"] = f"Webcam #{cam_idx}"
-        elif src_type == "Sample":
-            sample_name = str(p) if p else "crowd_sample_1.mp4"
-            ok = vp.open_sample(sample_name)
-            cam_state["source_label"] = f"Sample: {sample_name}"
-        elif src_type == "RTSP":
-            ok = vp.open_rtsp(str(p))
-            cam_state["source_label"] = f"Stream: {p}"
+                other_cid = "camera2" if cid == "camera1" else "camera1"
+                other_state = state[other_cid]
 
-        # Guaranteed Fallback: If primary source fails, open sample video
-        if not ok:
-            samples = vp.get_sample_videos()
-            if samples:
-                fallback_sample = samples[1] if (len(samples) > 1 and cid == "camera2") else samples[0]
-                print(f"[Server] Primary source '{p}' unavailable for {cid}. Falling back to sample video '{fallback_sample}'.")
-                ok = vp.open_sample(fallback_sample)
-                cam_state["source_label"] = f"Sample (Dual Cam): {fallback_sample}"
-            if not ok:
-                print(f"[Server] Primary & sample sources unavailable for {cid}. Falling back to synthetic video feed.")
-                ok = vp.open_synthetic()
-                cam_state["source_label"] = "Synthetic Stream"
+                # Check if this webcam is already in use by the other running camera
+                is_same_as_other = (
+                    other_state["running"] and 
+                    other_state.get("vp") and 
+                    other_state["vp"].source_type == video_processor.VideoProcessor.SOURCE_WEBCAM and
+                    str(other_state["vp"].source_path) == str(cam_idx)
+                )
 
-        if ok:
-            cam_state["vp"] = vp
-            cam_state["running"] = True
-            cam_analyzers["counter"].reset()
-            cam_analyzers["behavior_an"].reset()
-            cam_analyzers["risk_pred"].reset()
-            cam_analyzers["movement_an"].reset()
-            cam_analyzers["alerter"].clear()
-            for k in cam_state["history"]:
-                cam_state["history"][k].clear()
-            print(f"[Server] start_cam {cid}: ok={ok}, source={cam_state['source_label']}, running={cam_state['running']}", flush=True)
-        else:
-            print(f"[Server] start_cam {cid} FAILED: ok=False", flush=True)
-        return ok
+                if is_same_as_other:
+                    # Check if another distinct physical webcam is available
+                    avail = video_processor.detect_available_webcams()
+                    other_avail = [c["index"] for c in avail if c["index"] != cam_idx]
+                    if other_avail:
+                        cam_idx = other_avail[0]
+                        ok = vp.open_webcam(cam_idx)
+                        cam_state["source_label"] = f"Webcam #{cam_idx}"
+                    else:
+                        # Only 1 physical camera connected: share the live webcam frame!
+                        print(f"[Server] Single webcam detected. Sharing live feed from {other_cid} to {cid}.")
+                        cam_state["shared_from"] = other_cid
+                        cam_state["source_label"] = f"Webcam #{cam_idx} (Live Shared)"
+                        ok = True
+                else:
+                    ok = vp.open_webcam(cam_idx)
+                    cam_state["source_label"] = f"Webcam #{cam_idx}"
+
+                    # If requested index failed and wasn't 0, try default 0
+                    if not ok and cam_idx != 0:
+                        print(f"[Server] Webcam #{cam_idx} unavailable. Retrying with Webcam #0...")
+                        if other_state["running"] and str(getattr(other_state.get("vp"), "source_path", "")) == "0":
+                            cam_state["shared_from"] = other_cid
+                            cam_state["source_label"] = "Webcam #0 (Live Shared)"
+                            ok = True
+                        else:
+                            ok = vp.open_webcam(0)
+                            if ok:
+                                cam_state["source_label"] = "Webcam #0"
+
+            elif src_type == "Sample":
+                sample_name = str(p) if p else "crowd_sample_1.mp4"
+                ok = vp.open_sample(sample_name)
+                cam_state["source_label"] = f"Sample: {sample_name}"
+            elif src_type == "RTSP":
+                ok = vp.open_rtsp(str(p))
+                cam_state["source_label"] = f"Stream: {p}"
+
+            if not ok and src_type != "Webcam":
+                # Fallback to sample video ONLY if the source was already a file/sample/RTSP
+                samples = vp.get_sample_videos()
+                if samples:
+                    fallback_sample = samples[1] if (len(samples) > 1 and cid == "camera2") else samples[0]
+                    print(f"[Server] Primary source '{p}' unavailable for {cid}. Falling back to sample video '{fallback_sample}'.")
+                    ok = vp.open_sample(fallback_sample)
+                    cam_state["source_label"] = f"Sample (Dual Cam): {fallback_sample}"
+                if not ok:
+                    ok = vp.open_synthetic()
+                    cam_state["source_label"] = "Synthetic Stream"
+
+            if ok:
+                if cam_state.get("shared_from") is None:
+                    cam_state["vp"] = vp
+                cam_state["running"] = True
+                cam_analyzers["counter"].reset()
+                cam_analyzers["behavior_an"].reset()
+                cam_analyzers["risk_pred"].reset()
+                cam_analyzers["movement_an"].reset()
+                cam_analyzers["alerter"].clear()
+                for k in cam_state["history"]:
+                    cam_state["history"][k].clear()
+                print(f"[Server] start_cam {cid}: ok={ok}, source={cam_state['source_label']}, running={cam_state['running']}", flush=True)
+            else:
+                print(f"[Server] start_cam {cid} FAILED: ok=False", flush=True)
+            return ok
 
     if camera_id == "both":
-        ok1 = start_cam("camera1", param)
-        
-        # Robust Dual Camera Initialization
         if src_type == "Webcam":
-            p2 = int(param) + 1
-            ok2 = start_cam("camera2", p2)
-            if not ok2:
-                # System only has 1 physical webcam; load sample video for Camera 2 so dual stream works seamlessly
-                vp_test = video_processor.VideoProcessor()
-                all_samples = vp_test.get_sample_videos()
-                p2 = all_samples[0] if all_samples else "crowd_sample_1.mp4"
-                src_type_bak = src_type
-                src_type = "Sample"
+            cams = video_processor.detect_available_webcams()
+            if len(cams) >= 2:
+                # 2 physical USB cameras plugged in! Assign 1st to Cam 1, 2nd to Cam 2
+                p1 = cams[0]["index"]
+                p2 = cams[1]["index"]
+                print(f"[Server] Dual USB cameras detected: Cam 1 -> Index #{p1}, Cam 2 -> Index #{p2}")
+                ok1 = start_cam("camera1", p1)
                 ok2 = start_cam("camera2", p2)
-                src_type = src_type_bak
+            else:
+                p1 = cams[0]["index"] if cams else 0
+                ok1 = start_cam("camera1", p1)
+                ok2 = False
+                try:
+                    target_p2 = int(param)
+                except (ValueError, TypeError):
+                    target_p2 = 0
+                if target_p2 != p1:
+                    print(f"[Server] Trying user-selected webcam #{target_p2} for Camera 2...")
+                    ok2 = start_cam("camera2", target_p2)
+                if not ok2 and ok1:
+                    with cam_locks["camera2"]:
+                        state["camera2"]["running"] = False
+                        if state["camera2"]["vp"]:
+                            state["camera2"]["vp"].release()
+                            state["camera2"]["vp"] = None
+                        state["camera2"]["shared_from"] = "camera1"
+                        state["camera2"]["source_label"] = f"Webcam #{p1} (Live Shared)"
+                        state["camera2"]["running"] = True
+                        for k in state["camera2"]["history"]:
+                            state["camera2"]["history"][k].clear()
+                    ok2 = True
         elif src_type == "Sample":
             vp_test = video_processor.VideoProcessor()
             all_samples = vp_test.get_sample_videos()
+            p1 = param
             p2 = param
             if len(all_samples) > 1:
                 other_samples = [s for s in all_samples if s != param]
                 if other_samples:
                     p2 = other_samples[0]
+            ok1 = start_cam("camera1", p1)
             ok2 = start_cam("camera2", p2)
         else:
+            ok1 = start_cam("camera1", param)
             ok2 = start_cam("camera2", param)
 
         if ok1 or ok2:
@@ -737,7 +831,7 @@ def start_monitoring():
         if ok:
             return jsonify({"success": True})
         else:
-            return jsonify({"success": False, "error": "Failed to open video source."})
+            return jsonify({"success": False, "error": f"Failed to open video source for {camera_id}."})
 
 @app.route('/api/stop', methods=['POST'])
 def stop_monitoring():
@@ -745,14 +839,26 @@ def stop_monitoring():
     camera_id = data.get("camera_id", "both")
     
     def stop_cam(cid):
-        state[cid]["running"] = False
-        time.sleep(0.05)
-        if analyzers[cid]["recorder"]._recording:
-            analyzers[cid]["recorder"].stop_clip()
-        if state[cid]["vp"]:
-            state[cid]["vp"].release()
-            state[cid]["vp"] = None
-        state[cid]["current_frame"] = None
+        with cam_locks[cid]:
+            cam_state = state[cid]
+            cam_state["running"] = False
+            cam_state["shared_from"] = None
+            cam_state["raw_frame"] = None
+            time.sleep(0.05)
+            if analyzers[cid]["recorder"]._recording:
+                analyzers[cid]["recorder"].stop_clip()
+            if cam_state["vp"]:
+                cam_state["vp"].release()
+                cam_state["vp"] = None
+            cam_state["current_frame"] = None
+            
+            # If the other camera was sharing from cid, stop it too
+            other_cid = "camera2" if cid == "camera1" else "camera1"
+            if state[other_cid].get("shared_from") == cid:
+                state[other_cid]["running"] = False
+                state[other_cid]["shared_from"] = None
+                state[other_cid]["raw_frame"] = None
+                state[other_cid]["current_frame"] = None
 
     if camera_id == "both":
         stop_cam("camera1")
@@ -772,6 +878,71 @@ def toggle_simulation():
         state["camera1"]["simulations"][sim_type] = active
         state["camera2"]["simulations"][sim_type] = active
     return jsonify({"success": True})
+
+@app.route('/api/test_telegram', methods=['POST', 'GET'])
+def api_test_telegram():
+    import notifier
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    camera_label = "Camera 1"
+    level = "HIGH RISK"
+    score = 75.0
+    people = state["camera1"]["stats"].get("person_count", 1) or 1
+    
+    # Save live frame as evidence photo
+    ev_path = None
+    for cid in ("camera1", "camera2"):
+        if state[cid].get("current_frame"):
+            test_img_path = os.path.join(config.EVIDENCE_IMG_DIR, f"Camera_1_Evidence_{time.strftime('%Y%m%d_%H%M%S')}.jpg")
+            with open(test_img_path, "wb") as f:
+                f.write(state[cid]["current_frame"])
+            ev_path = test_img_path
+            break
+            
+    stats = database.get_session_stats(camera_label)
+    peak_crowd = max(people, int(stats.get('max_people', 0)))
+    avg_crowd = max(people, int(stats.get('avg_people', 0)))
+    max_risk = max(score, float(stats.get('max_risk', 0)))
+    total_incidents = max(1, int(stats.get('total_incidents', 0)))
+    total_alerts = stats.get('total_alerts', 0)
+    
+    recent = database.get_recent_incidents(2, camera_label)
+    recent_str = ""
+    for inc in recent:
+        ts = inc.get("timestamp", "")[:16]
+        r = inc.get("risk_score", 0)
+        p = inc.get("people_count", 0)
+        recent_str += f"  - {ts}  Risk:{r:.0f}%  People:{p}\n"
+
+    msg = (
+        f"VISION GUARD ALERT [{camera_label}]: {level}\n\n"
+        f"📍 LIVE STATUS\n"
+        f"📷 Camera      : {camera_label}\n"
+        f"📊 Risk Score  : {score:.0f}%\n"
+        f"👥 People Count: {people}\n"
+    )
+    if ev_path:
+        msg += f"📁 Evidence    : {ev_path}\n"
+    msg += (
+        f"⚡ Status      : 🔴 {level}: Risk score {score:.1f}%.  Immediate intervention required.\n\n\n"
+        f"==============================\n"
+        f"📋 SESSION REPORT\n"
+        f"==============================\n"
+        f"👥 Peak Crowd     : {peak_crowd} people\n"
+        f"📊 Avg Crowd      : {avg_crowd} people\n"
+        f"🔥 Max Risk Score : {max_risk:.0f}%\n"
+        f"🚨 Total Incidents: {total_incidents}\n"
+        f"⚠️  Total Alerts   : {total_alerts}\n"
+        f"🕒 Timestamp      : {timestamp}\n"
+        f"==============================\n"
+        f"📌 Recent Incidents:\n"
+    )
+    if recent_str:
+        msg += recent_str
+    else:
+        msg += f"  - {timestamp[:16]}  Risk:{score:.0f}%  People:{people}\n"
+
+    success = notifier.send_telegram_alert(msg, image_path=ev_path)
+    return jsonify({"success": success, "message": "Telegram alert dispatched successfully!" if success else "Failed to dispatch Telegram message."})
 
 @app.route('/api/config/update', methods=['POST'])
 def update_config():
@@ -823,6 +994,63 @@ def video_feed(camera_id):
 def get_samples():
     vp = video_processor.VideoProcessor()
     return jsonify({"samples": vp.get_sample_videos()})
+
+@app.route('/api/upload_video', methods=['POST'])
+def upload_video():
+    try:
+        if 'video' not in request.files:
+            return jsonify({"success": False, "error": "No video file received"}), 400
+        
+        file = request.files['video']
+        if not file or file.filename == '':
+            return jsonify({"success": False, "error": "No video file selected"}), 400
+
+        raw_filename = file.filename
+        from werkzeug.utils import secure_filename
+        sec_filename = secure_filename(raw_filename)
+        
+        ext = os.path.splitext(raw_filename)[1].lower()
+        if not ext:
+            ext = os.path.splitext(sec_filename)[1].lower() or '.mp4'
+
+        allowed_exts = {'.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv'}
+        if ext not in allowed_exts:
+            return jsonify({"success": False, "error": f"Invalid format '{ext}'. Supported formats: .mp4, .avi, .mov, .mkv, .webm, .flv"}), 400
+
+        if not sec_filename or sec_filename.startswith('.'):
+            base_name = os.path.splitext(raw_filename)[0].replace(' ', '_')
+            sec_filename = f"{base_name}_{int(time.time())}{ext}"
+        if not sec_filename.endswith(ext):
+            sec_filename += ext
+
+        target_dir = config.SAMPLE_VIDEOS_DIR
+        os.makedirs(target_dir, exist_ok=True)
+        save_path = os.path.join(target_dir, sec_filename)
+
+        file.seek(0)
+        file.save(save_path)
+
+        try:
+            os.makedirs("uploads", exist_ok=True)
+            import shutil
+            shutil.copy(save_path, os.path.join("uploads", sec_filename))
+        except Exception as e:
+            print(f"[Server] Upload backup notice: {e}")
+
+        vp = video_processor.VideoProcessor()
+        samples = vp.get_sample_videos()
+
+        print(f"[Server] Uploaded crowd video successfully saved: {save_path} ({os.path.getsize(save_path)} bytes)")
+        return jsonify({
+            "success": True,
+            "filename": sec_filename,
+            "samples": samples,
+            "message": f"Video '{sec_filename}' uploaded successfully!"
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": f"Server error processing upload: {str(e)}"}), 500
 
 @app.route('/api/analytics', methods=['GET'])
 def get_analytics():

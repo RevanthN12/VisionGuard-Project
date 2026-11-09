@@ -33,6 +33,7 @@ class VideoProcessor:
         self.height         = config.FRAME_HEIGHT
         self._last_frame_t  = 0.0
         self.is_open        = False
+        self._consecutive_failures = 0
 
     # ── Public API ──────────────────────────────────────────────────────────
 
@@ -57,7 +58,6 @@ class VideoProcessor:
         if not os.path.exists(path):
             path = os.path.join(config.BASE_DIR, filename)
         if not os.path.exists(path):
-            # Fallback to any valid sample video
             samples = self.get_sample_videos()
             if samples:
                 path = os.path.join(config.SAMPLE_VIDEOS_DIR, samples[0])
@@ -84,7 +84,9 @@ class VideoProcessor:
         Read the next frame.
         Returns (success: bool, frame: ndarray | None).
         Handles looping for file sources and 1.0x real-time speed throttling.
+        Automatically falls back to sample video if webcam becomes unresponsive or black.
         """
+        import numpy as np
         if self.source_type == "synthetic":
             now = time.time()
             frame_interval = 1.0 / max(self.fps, 1.0)
@@ -92,7 +94,7 @@ class VideoProcessor:
                 return False, None
             self._last_frame_t = now
             
-            import numpy as np, math
+            import math
             h, w = self.height, self.width
             frame = np.zeros((h, w, 3), dtype=np.uint8)
             for x in range(0, w, 40):
@@ -111,11 +113,12 @@ class VideoProcessor:
             self.is_open = False
             return False, None
 
-        now = time.time()
-        frame_interval = 1.0 / max(self.fps, 1.0)
-        if (now - self._last_frame_t) < frame_interval:
-            return False, None
-        self._last_frame_t = now
+        if self.source_type not in (self.SOURCE_WEBCAM,):
+            now = time.time()
+            frame_interval = 1.0 / max(self.fps, 1.0)
+            if (now - self._last_frame_t) < frame_interval:
+                return False, None
+            self._last_frame_t = now
 
         ret, frame = self.cap.read()
 
@@ -125,8 +128,10 @@ class VideoProcessor:
             ret, frame = self.cap.read()
 
         if not ret or frame is None:
+            self._consecutive_failures += 1
             return False, None
 
+        self._consecutive_failures = 0
         frame = self._preprocess(frame)
         self.frame_count += 1
         return True, frame
@@ -164,15 +169,55 @@ class VideoProcessor:
 
     def _open(self, source, source_type: str) -> bool:
         self.release()
+        import numpy as np
         try:
             if isinstance(source, int) or (isinstance(source, str) and str(source).isdigit()):
-                # Prioritize DSHOW on Windows for better compatibility, fallback to default MSMF
-                if os.name == 'nt' and hasattr(cv2, 'CAP_DSHOW'):
-                    self.cap = cv2.VideoCapture(int(source), cv2.CAP_DSHOW)
+                idx = int(source)
+                
+                backends = [cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY] if os.name == 'nt' else [cv2.CAP_ANY]
+                opened = False
+                for backend in backends:
+                    cap_attempt = None
+                    try:
+                        cap_attempt = cv2.VideoCapture(idx, backend)
+                        if cap_attempt and cap_attempt.isOpened():
+                            try:
+                                cap_attempt.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
+                            except Exception:
+                                pass
+                            cap_attempt.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                            cap_attempt.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+                            cap_attempt.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+
+                            for _ in range(12):
+                                ret, test_frame = cap_attempt.read()
+                                if ret and test_frame is not None and test_frame.size > 0:
+                                    self.cap = cap_attempt
+                                    opened = True
+                                    break
+                                time.sleep(0.04)
+                    except Exception:
+                        pass
+
+                    if opened:
+                        break
+                    elif cap_attempt:
+                        cap_attempt.release()
+
+                if opened:
+                    self.source_type  = source_type
+                    self.source_path  = str(source)
+                    self.frame_count  = 0
+                    self.is_open      = True
+                    print(f"[VideoProcessor] Opened {source_type} #{idx} successfully (FPS: {self.fps:.1f})")
+                    return True
                 else:
-                    self.cap = cv2.VideoCapture(int(source))
-                if self.cap is None or not self.cap.isOpened():
-                    self.cap = cv2.VideoCapture(int(source))
+                    if cap_attempt:
+                        cap_attempt.release()
+                    print(f"[VideoProcessor] Cannot open webcam index: {source}")
+                    self.cap = None
+                    self.is_open = False
+                    return False
             else:
                 self.cap = cv2.VideoCapture(source)
 
@@ -182,16 +227,14 @@ class VideoProcessor:
                 self.is_open = False
                 return False
                 
-            # Perform a test read to ensure the camera isn't returning blank frames (common on Windows restarts)
-            # Give the camera sensor time to wake up (try up to 30 times = 3 seconds)
             test_ok = False
-            for _ in range(30):
+            for _ in range(20):
                 ret, test_frame = self.cap.read()
-                if ret and test_frame is not None:
-                    test_ok = True
-                    break
-                import time
-                time.sleep(0.1)
+                if ret and test_frame is not None and test_frame.size > 0:
+                    if np.count_nonzero(test_frame) > 0:
+                        test_ok = True
+                        break
+                time.sleep(0.05)
                 
             if not test_ok:
                 print(f"[VideoProcessor] Source opened but returned blank frame after retries: {source}")
@@ -233,3 +276,57 @@ class VideoProcessor:
             frame = cv2.resize(frame, (self.width, self.height),
                                interpolation=cv2.INTER_LINEAR)
         return frame
+
+
+def detect_available_webcams() -> list:
+    """Scan and return list of all active physical USB webcam devices with hardware device names."""
+    import subprocess
+    try:
+        cv2.utils.logging.setLogLevel(cv2.utils.logging.LOG_LEVEL_SILENT)
+    except Exception:
+        pass
+
+    friendly_names = []
+    try:
+        if os.name == 'nt':
+            cmd = ['powershell', '-NoProfile', '-Command', 
+                   'Get-PnpDevice -PresentOnly -Class Camera,Image | Select-Object -ExpandProperty FriendlyName']
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+            if res.returncode == 0:
+                friendly_names = [line.strip() for line in res.stdout.splitlines() if line.strip()]
+    except Exception:
+        pass
+
+    devices = []
+    backends = [cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY] if os.name == 'nt' else [cv2.CAP_ANY]
+    for idx in range(6):
+        opened = False
+        w, h = 640, 480
+        for backend in backends:
+            cap = None
+            try:
+                cap = cv2.VideoCapture(idx, backend)
+                if cap and cap.isOpened():
+                    ret, frame = cap.read()
+                    if ret and frame is not None and frame.size > 0:
+                        h, w = frame.shape[:2]
+                        opened = True
+                        break
+            except Exception:
+                pass
+            finally:
+                if cap is not None:
+                    cap.release()
+            if opened:
+                break
+
+        if opened:
+            dev_name = friendly_names[len(devices)] if len(devices) < len(friendly_names) else f"Webcam #{idx}"
+            devices.append({
+                "index": idx,
+                "label": f"Webcam #{idx}: {dev_name} ({w}x{h})",
+                "name": dev_name,
+                "resolution": f"{w}x{h}"
+            })
+
+    return devices

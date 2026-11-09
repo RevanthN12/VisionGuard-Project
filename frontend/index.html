@@ -53,16 +53,27 @@
                 <div class="input-wrapper">
                     <select id="sourceType" onchange="toggleSourceInputs()">
                         <option value="Webcam" selected>Webcam</option>
-                        <option value="Sample">Sample Video</option>
+                        <option value="Sample">Sample / Uploaded Video</option>
+                        <option value="Upload">📤 Upload New Video...</option>
                         <option value="RTSP">CCTV / RTSP URL</option>
                     </select>
                 </div>
                 
-                <div id="webcamInput" class="input-wrapper">
-                    <input type="number" id="webcamIndex" value="0" min="0" title="Camera Index">
+                <div id="webcamInput" class="input-wrapper" style="flex-direction: column; gap: 6px; width: 100%;">
+                    <div style="display: flex; gap: 6px; width: 100%; align-items: center;">
+                        <select id="webcamSelect" style="flex: 1;" onchange="document.getElementById('webcamIndex').value = this.value;"></select>
+                        <input type="number" id="webcamIndex" value="0" min="0" max="6" style="width: 58px; text-align: center; padding: 6px 4px; font-weight: 600;" title="Camera Index Number (0, 1, 2, 3, 4)" oninput="updateWebcamFromInput(this.value)">
+                        <button type="button" class="btn btn-secondary" onclick="refreshCameras()" style="padding: 6px 10px; font-size: 0.8rem; white-space: nowrap;" title="Scan for connected USB webcams">🔄 Scan</button>
+                    </div>
+                    <div id="webcamDetectedNote" style="font-size: 0.72rem; color: #00f0ff; margin-top: 2px;"></div>
                 </div>
-                <div id="sampleInput" class="input-wrapper hidden">
-                    <select id="sampleFile"></select>
+                <div id="sampleInput" class="input-wrapper hidden" style="flex-direction: column; gap: 8px; width: 100%;">
+                    <select id="sampleFile" style="width: 100%;"></select>
+                    <label for="videoUploadInput" class="btn btn-secondary" style="width: 100%; font-size: 0.82rem; justify-content: center; gap: 6px; padding: 8px 10px; cursor: pointer; display: flex; align-items: center; box-sizing: border-box; text-align: center;">
+                        📤 Upload Crowd Video
+                    </label>
+                    <input type="file" id="videoUploadInput" accept="video/*,video/mp4,video/x-matroska,video/quicktime,video/x-msvideo,.mp4,.avi,.mov,.mkv,.webm,.flv" style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0;" onchange="handleVideoUpload(event)">
+                    <div id="uploadProgress" class="hidden" style="font-size: 0.75rem; color: #00f0ff; text-align: center; font-weight: 500;">⏳ Uploading video...</div>
                 </div>
                 <div id="rtspInput" class="input-wrapper hidden">
                     <input type="text" id="rtspUrl" placeholder="rtsp://...">
@@ -84,8 +95,14 @@
                         <button class="btn btn-primary" onclick="startMonitoring('both')" style="flex:1; font-size: 0.8rem;">▶ Both Cameras</button>
                         <button class="btn btn-secondary" onclick="stopMonitoring('both')" style="flex:1; font-size: 0.8rem;">⏹ Stop Both</button>
                     </div>
+                    <div style="margin-top: 4px;">
+                        <button class="btn btn-secondary" onclick="sendTestTelegramAlert()" id="btnTestTelegram" style="width: 100%; font-size: 0.78rem; justify-content: center; gap: 6px; padding: 7px; border: 1px solid rgba(0, 240, 255, 0.4); color: #00f0ff;" title="Send an immediate test alert to your Telegram chat">
+                            📱 Test Telegram Alert
+                        </button>
+                    </div>
                 </div>
             </div>
+
             <div class="status-indicator">
                 <div class="dot" id="statusDot"></div>
                 <span id="statusText">MONITORING STOPPED</span>
@@ -97,8 +114,13 @@
             
             <!-- VIEW: LIVE MONITOR -->
             <div id="view-live" class="view-section active">
-                <header class="top-header">
+                <header class="top-header" style="display: flex; justify-content: space-between; align-items: center;">
                     <h1 class="page-title">Live Monitor Dashboard</h1>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <label for="videoUploadInput" class="btn btn-secondary" style="font-size: 0.85rem; padding: 6px 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; border: 1px solid rgba(0,240,255,0.4);">
+                            📤 Upload Crowd Video
+                        </label>
+                    </div>
                     <div id="alertBanner" class="alert-banner hidden">
                         <span class="alert-icon">⚠️</span>
                         <span class="alert-msg"></span>
@@ -174,7 +196,7 @@
                             <h3>AI Video Analysis - Camera 1</h3>
                         </div>
                         <div class="video-wrapper">
-                            <img id="cam1-video" src="" alt="Video Feed" class="video-feed">
+                            <img id="cam1-video" src="" class="video-feed">
                             <div class="video-overlay" id="cam1-overlay">
                                 <div class="spinner"></div>
                                 <div style="text-align: center;">
@@ -208,7 +230,7 @@
                             <h3>AI Video Analysis - Camera 2</h3>
                         </div>
                         <div class="video-wrapper">
-                            <img id="cam2-video" src="" alt="Video Feed" class="video-feed">
+                            <img id="cam2-video" src="" class="video-feed">
                             <div class="video-overlay" id="cam2-overlay">
                                 <div class="spinner"></div>
                                 <div style="text-align: center;">
@@ -519,6 +541,6 @@
         </main>
     </div>
 
-    <script src="script.js?v=4"></script>
+    <script src="script.js?v=7"></script>
 </body>
 </html>
